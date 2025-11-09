@@ -4,35 +4,22 @@ from __future__ import annotations
 import os
 from pathlib import Path
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
 
-# -----------------------------
-# Storage directory resolution
-# -----------------------------
+from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
+
+# ---------- Storage resolution ----------
 def resolve_data_dir() -> Path:
-    """
-    Determine a writable base directory for app data.
-
-    Priority:
-      1) DATA_DIR env var (recommended: /data when using a Render Disk)
-      2) /var/data
-      3) /tmp/data
-      4) <repo>/backend/data
-      5) /tmp  (last resort; no subdirs auto-created here)
-    """
     env = os.getenv("DATA_DIR")
-    candidates: list[Path] = []
-
+    candidates = []
     if env:
         candidates.append(Path(env))
-
-    # Common writable places
-    candidates.extend([
+    candidates += [
         Path("/var/data"),
         Path("/tmp/data"),
         Path(__file__).resolve().parent / "data",
-    ])
-
+    ]
     for c in candidates:
         try:
             c.mkdir(parents=True, exist_ok=True)
@@ -42,30 +29,51 @@ def resolve_data_dir() -> Path:
             return c
         except Exception:
             continue
-
-    # Fallback
     return Path("/tmp")
 
+DATA_DIR = resolve_data_dir()
+SUBDIRS = ["raw", "processed", "thumbs"]
 
-DATA_DIR: Path = resolve_data_dir()
-SUBDIRS = ["raw", "processed", "thumbs"]  # adjust to your project
-
-# -----------------------------
-# FastAPI app with lifespan
-# -----------------------------
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Create subdirectories at startup (NOT at import time)
     for sub in SUBDIRS:
         (DATA_DIR / sub).mkdir(parents=True, exist_ok=True)
     yield
 
-app = FastAPI(title="QR Backend", lifespan=lifespan)
+app = FastAPI(title="QR Backend MVP", lifespan=lifespan)
 
+# CORS so a simple web client can talk to us later
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # tighten later if needed
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-# -----------------------------
-# Health check
-# -----------------------------
+# ---------- Minimal “product” ----------
+@app.get("/", response_class=HTMLResponse)
+def root():
+    return f"""
+    <html>
+      <head><title>QR Backend MVP</title></head>
+      <body style="font-family: system-ui; margin: 2rem;">
+        <h1>QR Backend is live ✅</h1>
+        <p>DATA_DIR: <code>{DATA_DIR}</code></p>
+        <ul>
+          <li><a href="/healthz">/healthz</a> – health check</li>
+          <li><a href="/files">/files</a> – list uploaded files</li>
+          <li><a href="/docs">/docs</a> – interactive API docs</li>
+        </ul>
+        <h2>Quick upload</h2>
+        <form action="/upload" method="post" enctype="multipart/form-data">
+          <input type="file" name="file" />
+          <button type="submit">Upload</button>
+        </form>
+      </body>
+    </html>
+    """
+
 @app.get("/healthz")
 def healthz():
     return {
@@ -74,19 +82,27 @@ def healthz():
         "subdirs": [str(DATA_DIR / s) for s in SUBDIRS],
     }
 
+@app.post("/upload")
+async def upload(file: UploadFile = File(...)):
+    dest = DATA_DIR / "raw" / file.filename
+    # small safety check
+    if ".." in file.filename or file.filename.startswith("/"):
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    content = await file.read()
+    dest.write_bytes(content)
+    return {"saved": str(dest), "size": len(content)}
 
-# =========================================================
-# ⬇️  YOUR EXISTING ROUTES GO BELOW (unchanged in behavior)
-#     Example:
-#
-# from fastapi import UploadFile, File
-# @app.post("/upload")
-# async def upload(file: UploadFile = File(...)):
-#     dest = (DATA_DIR / "raw" / file.filename)
-#     with dest.open("wb") as f:
-#         f.write(await file.read())
-#     return {"saved": str(dest)}
-#
-# Keep using DATA_DIR like: DATA_DIR / "raw" / "filename.ext"
-# =========================================================
+@app.get("/files")
+def list_files():
+    files = sorted(p.name for p in (DATA_DIR / "raw").glob("*") if p.is_file())
+    return {"count": len(files), "files": files}
+
+@app.get("/files/{name}")
+def get_file(name: str):
+    if ".." in name or name.startswith("/"):
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    path = DATA_DIR / "raw" / name
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Not found")
+    return FileResponse(path)
 
