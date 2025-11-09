@@ -1,0 +1,22 @@
+# Node / Expo
+app/node_modules/
+app/.expo/
+app/.expo-shared/
+app/dist/
+app/.cache/
+*.log
+
+# Python
+backend/venv/
+backend/.venv/
+__pycache__/
+*.pyc
+
+# Local data (uploads / cache) — keep it out of Git!
+backend/qr_vision_data/
+
+# OS/Editor
+.DS_Store
+Thumbs.db
+.vscode/
+
