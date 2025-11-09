@@ -1,0 +1,38 @@
+# ===============================
+# Git Attributes for Homage Project
+# Keeps line endings consistent across OSes
+# ===============================
+
+# Normalize all text files to use LF in repo
+* text=auto eol=lf
+
+# Explicitly mark files
+*.sh text eol=lf
+*.py text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.js text eol=lf
+*.jsx text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.md text eol=lf
+
+# Binary files — don’t try to diff or modify
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.mp3 binary
+*.mp4 binary
+*.mov binary
+*.zip binary
+*.exe binary
+*.dll binary
+
+# Avoid CRLF issues for shell scripts and env files
+*.env text eol=lf
+*.env.* text eol=lf
+
