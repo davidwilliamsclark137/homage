@@ -3,4 +3,4 @@ uvicorn[standard]==0.32.0
 python-dotenv==1.0.1
 pillow==10.4.0
 python-multipart==0.0.9
-
+gunicorn
