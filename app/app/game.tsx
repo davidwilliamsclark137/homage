@@ -205,5 +205,123 @@ export default function GameScreen() {
     });
     if (shot.canceled) return;
 
-    const uri = shot.assets[
+    const asset = shot.assets[0];
+
+    try {
+      const form = new FormData();
+      form.append("file", {
+        uri: asset.uri,
+        name: `quest-${t.id}.jpg`,
+        type: "image/jpeg",
+      } as any);
+
+      form.append("quest_id", t.id);
+      form.append("quest_kind", t.kind);
+      form.append("latitude", String(loc.latitude));
+      form.append("longitude", String(loc.longitude));
+      form.append("target_latitude", String(t.latitude));
+      form.append("target_longitude", String(t.longitude));
+
+      await uploadForm(form);
+
+      setCompleted(prev => new Set(prev).add(t.id));
+      Alert.alert("Photo captured!", "Quest complete.");
+    } catch (err: any) {
+      Alert.alert("Upload failed", err?.message ?? "Unknown error");
+    }
+  }
+
+  const activeTarget = targets.find(t => t.id === (inRangeId ?? nearestId));
+  const activeDistance =
+    loc && activeTarget
+      ? haversine(loc, {
+          latitude: activeTarget.latitude,
+          longitude: activeTarget.longitude,
+        })
+      : null;
+
+  if (!loc) {
+    return (
+      <View style={styles.center}>
+        <Text>Finding your location...</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      <MapView
+        ref={mapRef}
+        style={StyleSheet.absoluteFill}
+        provider={PROVIDER_GOOGLE}
+        showsUserLocation
+        followsUserLocation
+        initialRegion={{
+          latitude: loc.latitude,
+          longitude: loc.longitude,
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01,
+        }}
+      >
+        {targets.map((t) => (
+          <React.Fragment key={t.id}>
+            <Circle
+              center={{ latitude: t.latitude, longitude: t.longitude }}
+              radius={t.radius}
+              fillColor={circleFillFor(t.id)}
+              strokeColor={pinColorFor(t.id)}
+            />
+            <Marker
+              coordinate={{ latitude: t.latitude, longitude: t.longitude }}
+              pinColor={pinColorFor(t.id)}
+              title={t.kind === "photo" ? "Photo quest" : "Check-in quest"}
+              description={`${t.radius} m radius`}
+            />
+          </React.Fragment>
+        ))}
+      </MapView>
+
+      <View style={styles.panel}>
+        <Text style={styles.heading}>Nearby quest:</Text>
+        {activeTarget ? (
+          <>
+            <Text style={styles.questText}>
+              {activeTarget.kind === "photo" ? "📸 Photo" : "📍 Check-in"} —{" "}
+              {activeDistance !== null ? `${activeDistance.toFixed(0)} m away` : ""}
+            </Text>
+            <Button
+              title={inRangeId ? "Capture here" : "Get closer"}
+              onPress={completeCurrent}
+              disabled={!inRangeId}
+            />
+          </>
+        ) : (
+          <Text style={styles.questText}>All quests complete.</Text>
+        )}
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1 },
+  center: { flex: 1, alignItems: "center", justifyContent: "center" },
+  panel: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    bottom: 28,
+    backgroundColor: "rgba(255,255,255,0.92)",
+    borderRadius: 16,
+    padding: 16,
+    gap: 10,
+  },
+  heading: {
+    fontSize: 20,
+    fontWeight: "700",
+  },
+  questText: {
+    fontSize: 18,
+  },
+});
 
