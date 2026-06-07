@@ -1,15 +1,13 @@
-// app/_layout.tsx — minimal router layout (no aliases, no custom hooks)
 import { Stack } from "expo-router";
 
 export default function RootLayout() {
   return (
-    <Stack
-      screenOptions={{
-        headerStyle: { backgroundColor: "#111" },
-        headerTintColor: "#fff",
-        headerTitleStyle: { fontWeight: "600" },
-      }}
-    />
+    <Stack>
+      <Stack.Screen name="index" options={{ title: "Homage" }} />
+      <Stack.Screen name="capture" options={{ title: "Capture" }} />
+      <Stack.Screen name="map" options={{ title: "Map" }} />
+      <Stack.Screen name="health" options={{ title: "Backend Health" }} />
+    </Stack>
   );
 }
 

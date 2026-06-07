@@ -1,86 +1,142 @@
-// app/app/capture.tsx
-import * as React from "react";
-import { View, Text, Button, Alert, Image, StyleSheet, ScrollView } from "react-native";
+import React, { useState } from "react";
+import { View, Text, Image, Button, Alert, ActivityIndicator, StyleSheet } from "react-native";
 import * as ImagePicker from "expo-image-picker";
-import { api } from "../api";
-import { useRouter } from "expo-router";
+import * as Location from "expo-location";
+import { uploadForm } from "../api";
 
-export default function Capture() {
-  const [imageUri, setImageUri] = React.useState<string | null>(null);
-  const [uploadStatus, setUploadStatus] = React.useState<string>("");
+export default function CaptureScreen() {
+  const [uri, setUri] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [resultText, setResultText] = useState<string>("");
 
-  const router = useRouter();
-
-  const pickImage = async () => {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert("Permission denied", "Please allow photo access to upload.");
-      return;
+  async function ensurePermissions() {
+    const { status: cam } = await ImagePicker.requestCameraPermissionsAsync();
+    const { status: lib } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    const { status: loc } = await Location.requestForegroundPermissionsAsync();
+    if (cam !== "granted" || lib !== "granted") {
+      Alert.alert("Permissions needed", "Camera and library access are required.");
+      return false;
     }
+    if (loc !== "granted") {
+      // still allow capture without GPS
+      Alert.alert("Location optional", "We'll continue without GPS.");
+    }
+    return true;
+  }
 
-    const result = await ImagePicker.launchImageLibraryAsync({
+  async function pickFromCamera() {
+    if (!(await ensurePermissions())) return;
+    const shot = await ImagePicker.launchCameraAsync({
+      // ✅ Use the compatible API for your version
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: false,
       quality: 0.8,
+      exif: true,
     });
+    if (!shot.canceled) setUri(shot.assets[0].uri);
+  }
 
-    if (result.canceled || !result.assets?.length) return;
+  async function pickFromLibrary() {
+    if (!(await ensurePermissions())) return;
+    const sel = await ImagePicker.launchImageLibraryAsync({
+      // ✅ Use the compatible API for your version
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: false,
+      quality: 0.8,
+      exif: true,
+    });
+    if (!sel.canceled) setUri(sel.assets[0].uri);
+  }
 
-    const asset = result.assets[0];
-    setImageUri(asset.uri);
-    setUploadStatus("Uploading...");
+  async function doUpload() {
+    if (!uri) return;
+    setBusy(true);
+    setResultText("");
 
     try {
-      const blob = await fetch(asset.uri).then((r) => r.blob());
-      const res = await api.uploadBlob(blob, asset.fileName || "photo.jpg");
-      setUploadStatus(`✅ Uploaded to: ${res.saved} (${res.size} bytes)`);
-    } catch (err: any) {
-      console.error(err);
-      setUploadStatus(`❌ Upload failed: ${err.message}`);
+      // Try to get current GPS (optional)
+      let lat: number | undefined;
+      let lon: number | undefined;
+      try {
+        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        lat = loc.coords.latitude;
+        lon = loc.coords.longitude;
+      } catch {
+        // ignore if denied/unavailable
+      }
+
+      // Infer filename & type
+      const filename = uri.split("/").pop() ?? `capture-${Date.now()}.jpg`;
+      const ext = filename.toLowerCase().split(".").pop();
+      const type =
+        ext === "png" ? "image/png" :
+        ext === "heic" ? "image/heic" :
+        "image/jpeg";
+
+      const form = new FormData();
+      form.append("file", {
+        // @ts-ignore — React Native FormData file shape
+        uri,
+        name: filename,
+        type,
+      });
+      if (lat !== undefined && lon !== undefined) {
+        form.append("lat", String(lat));
+        form.append("lon", String(lon));
+      }
+
+      const json = await uploadForm(form);
+      setResultText(JSON.stringify(json, null, 2));
+      Alert.alert("Uploaded", "Your image was uploaded successfully.");
+    } catch (e: any) {
+      Alert.alert("Upload failed", String(e?.message ?? e));
+    } finally {
+      setBusy(false);
     }
-  };
+  }
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>Capture & Upload</Text>
+    <View style={styles.container}>
+      <Text style={styles.title}>Capture</Text>
 
-      <Button title="Pick image from library" onPress={pickImage} />
+      <View style={styles.buttons}>
+        <Button title="📷 Take Photo" onPress={pickFromCamera} />
+        <Button title="🖼️ Pick From Library" onPress={pickFromLibrary} />
+      </View>
 
-      {imageUri && (
-        <View style={{ marginTop: 20 }}>
-          <Image
-            source={{ uri: imageUri }}
-            style={{ width: 280, height: 280, borderRadius: 12 }}
-          />
+      {uri ? (
+        <Image source={{ uri }} style={styles.preview} resizeMode="cover" />
+      ) : (
+        <Text style={styles.hint}>Pick or take a photo to upload.</Text>
+      )}
+
+      <View style={{ height: 12 }} />
+
+      <Button title={busy ? "Uploading…" : "⬆️ Upload to server"} onPress={doUpload} disabled={!uri || busy} />
+
+      {busy && (
+        <View style={styles.center}>
+          <ActivityIndicator />
         </View>
       )}
 
-      <Text selectable style={styles.status}>
-        {uploadStatus}
-      </Text>
-
-      <Button title="← Back to Home" onPress={() => router.back()} />
-    </ScrollView>
+      {!!resultText && (
+        <View style={styles.resultBox}>
+          <Text style={styles.mono}>{resultText}</Text>
+        </View>
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flexGrow: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: "600",
-    marginBottom: 20,
-  },
-  status: {
-    marginTop: 20,
-    fontSize: 14,
-    backgroundColor: "#f0f0f0",
-    padding: 12,
-    borderRadius: 8,
-    width: "100%",
-  },
+  container: { flex: 1, gap: 12, padding: 16 },
+  title: { fontSize: 22, fontWeight: "700" },
+  buttons: { flexDirection: "row", gap: 12, justifyContent: "space-between" },
+  preview: { width: "100%", height: 280, borderRadius: 8, backgroundColor: "#eee" },
+  hint: { opacity: 0.7 },
+  center: { alignItems: "center", justifyContent: "center" },
+  resultBox: { marginTop: 12, padding: 12, backgroundColor: "#fafafa", borderRadius: 8 },
+  mono: { fontFamily: "Menlo", fontSize: 12 },
 });
+
