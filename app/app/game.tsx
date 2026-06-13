@@ -9,11 +9,47 @@ import { uploadForm } from "../api";
 type LatLng = { latitude: number; longitude: number };
 type Target = {
   id: string;
+  name; string;
+  description; string;
   latitude: number;
   longitude: number;
   radius: number;     // meters
   kind: "checkin" | "photo";
+  order: number;
 };
+
+const DOWNTOWN_MCKINNEY_QUESTS: Target[] = [
+  {
+    id: "courthouse",
+    name: "Historic Downtown",
+    description: "Take a photo of the courthouse clock tower", 
+    latitude: 33.1972,
+    longitude: -96.6153,
+    radius: 35,
+    kind: "photo",
+    order: 1,
+  },
+  {
+    id: "square",
+    name: "McKinney Square",
+    description: "Check in at the center of the square.",
+    latitude: 33.1970,
+    longitude: -96.6156,
+    radius: 35,
+    kind: "checkin",
+    order: 2,
+  },
+  {
+    id: "mural",
+    name: "Downtown Mural",
+    description: "Capture a photo of the mural artwork.",
+    latitude: 33.1976,
+    longitude: -96.6148,
+    radius: 35,
+    kind: "photo",
+    order: 3,
+  },
+];
 
 const R = 6371000; // meters
 function haversine(a: LatLng, b: LatLng) {
@@ -97,22 +133,13 @@ export default function GameScreen() {
     };
   }, []);
 
-  // 2) spawn targets once at first fix (3..5 within ~50..200m)
-  useEffect(() => {
-    if (!loc || targets.length) return;
-    const seed = seedFromLatLng(loc.latitude, loc.longitude);
-    const rand = mulberry32(seed);
-    const count = 3 + Math.floor(rand() * 3);
-    const t: Target[] = [];
-    for (let i = 0; i < count; i++) {
-      const bearing = Math.floor(rand() * 360);
-      const dist = 60 + Math.floor(rand() * 140); // 60..200 m
-      const p = offset(loc, bearing, dist);
-      const kind: Target["kind"] = rand() < 0.5 ? "checkin" : "photo";
-      t.push({ id: `t${i}`, latitude: p.latitude, longitude: p.longitude, radius: kind === "photo" ? 25 : 20, kind });
-    }
-    setTargets(t);
-  }, [loc, targets.length]);
+  
+    // 2) load fixed Downtown McKinney quests
+    useEffect(() => {
+	if (targets.length) return;
+	setTargets(DOWNTOWN_MCKINNEY_QUESTS);
+    }, [targets.length]);
+  
 
   // 3) compute nearest and in-range every time you move
   useEffect(() => {
@@ -121,8 +148,13 @@ export default function GameScreen() {
     let nearest: { id: string; d: number } | null = null;
     let newlyInRange: string | null = null;
 
-    for (const t of targets) {
-      if (completed.has(t.id)) continue; // ignore completed
+    const unlockedTargets = targets
+       .filter((t) => !completed.has(t.id))
+       .sort((a, b) => a.order - b.order)
+       .slice(0, 1);
+
+      
+    for (const t of unlockedTargets) {
       const d = haversine(loc, { latitude: t.latitude, longitude: t.longitude });
       if (!nearest || d < nearest.d) nearest = { id: t.id, d };
       if (d <= t.radius) {
@@ -216,6 +248,8 @@ export default function GameScreen() {
       } as any);
 
       form.append("quest_id", t.id);
+      form.append("quest_name", t.name);
+      form.append("quest_description", t.description);
       form.append("quest_kind", t.kind);
       form.append("latitude", String(loc.latitude));
       form.append("longitude", String(loc.longitude));
@@ -230,8 +264,14 @@ export default function GameScreen() {
       Alert.alert("Upload failed", err?.message ?? "Unknown error");
     }
   }
-
-  const activeTarget = targets.find(t => t.id === (inRangeId ?? nearestId));
+  const visibleTargets = targets
+     .filter((t) => !completed.has(t.id))
+     .sort((a, b) => a.order - b.order)
+     .slice(0, 1);
+    
+  const activeTarget =
+     visibleTargets.find(t => t.id === (inRangeId ?? nearestId)) ??
+     visibleTargets[0];
   const activeDistance =
     loc && activeTarget
       ? haversine(loc, {
@@ -263,7 +303,7 @@ export default function GameScreen() {
           longitudeDelta: 0.01,
         }}
       >
-        {targets.map((t) => (
+        {visibleTargets.map((t) => (
           <React.Fragment key={t.id}>
             <Circle
               center={{ latitude: t.latitude, longitude: t.longitude }}
@@ -282,12 +322,22 @@ export default function GameScreen() {
       </MapView>
 
       <View style={styles.panel}>
-        <Text style={styles.heading}>Nearby quest:</Text>
+        <Text style={styles.heading}>Local Dev Test - Nearby quest:</Text>
         {activeTarget ? (
           <>
             <Text style={styles.questText}>
-              {activeTarget.kind === "photo" ? "📸 Photo" : "📍 Check-in"} —{" "}
-              {activeDistance !== null ? `${activeDistance.toFixed(0)} m away` : ""}
+		Downtown McKinney Quest
+            </Text>
+	    <Text style={styles.questText}>
+		{activeTarget.name}
+	    </Text>
+	    <Text style={styles.questDescription}>
+		{activeTarget.description}
+	    </Text>
+		<Text style={styles.questText}>
+		{activeDistance !== null
+		    ? `${activeDistance.toFixed(0)} m away`
+                    : ""}
             </Text>
             <Button
               title={inRangeId ? "Capture here" : "Get closer"}
@@ -323,5 +373,10 @@ const styles = StyleSheet.create({
   questText: {
     fontSize: 18,
   },
+  questDescription: {
+    fontSize: 15,
+    opacity: 0.8,
+    marginBottom: 8,
+    }
 });
 

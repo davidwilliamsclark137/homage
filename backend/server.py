@@ -1,6 +1,10 @@
 # backend/server.py
 from __future__ import annotations
 
+import json
+import datetime import dateime, timezone
+from import fastapi import Form
+
 import os
 from pathlib import Path
 from contextlib import asynccontextmanager
@@ -32,7 +36,7 @@ def resolve_data_dir() -> Path:
     return Path("/tmp")
 
 DATA_DIR = resolve_data_dir()
-SUBDIRS = ["raw", "processed", "thumbs"]
+SUBDIRS = ["raw", "processed", "thumbs", "meta"]
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -83,13 +87,44 @@ def healthz():
     }
 
 @app.post("/upload")
-async def upload(file: UploadFile = File(...)):
-    dest = DATA_DIR / "raw" / file.filename
+async def upload(
+    file: UploadFile = File(...),
+    quest_id: str | None = Form(default=None),
+    quest_name: str | None = Form(default=None),
+    quest_description: str | None = Form(default=None),
+    quest_kind: str | None = Form(default=None),
+    latitude: str | None = Form(default=None),
+    longitude: str | None = Form(default=None),
+    target_latitude: str | None = Form(default=None),
+    target_longitude: str | None = Form(default=None),
+):
+    
     # small safety check
     if ".." in file.filename or file.filename.startswith("/"):
         raise HTTPException(status_code=400, detail="Invalid filename")
+    
+    dest = DATA_DIR / "raw" / file.filename
     content = await file.read()
     dest.write_bytes(content)
+
+    record = {
+        "quest_id": quest_id,
+        "quest_name": quest_name,
+        "quest_description": quest_description,
+        "quest_kind": quest_kind,
+        "latitude": latitude,
+        "longitude": longitude,
+        "target_latitude": target_latitude,
+        "target_longitude": target_longitude,
+        "filename": file.filename,
+        "file_url": f"/files/{file.filename}",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "size": len(content),
+    }
+
+    meta_path = DATA_DIR / "meta" / f"{Path(file.filename).stem}.json"
+    meta_path.write_text(json.dumps(record, indent=2), encoding="utf-8")
+    
     return {"saved": str(dest), "size": len(content)}
 
 @app.get("/files")
@@ -106,3 +141,15 @@ def get_file(name: str):
         raise HTTPException(status_code=404, detail="Not found")
     return FileResponse(path)
 
+@app.get("/completed")
+def completedc():
+    records = []
+    meta_dir = DATA_DIR / "meta"
+
+    for p in sorted(meta_dir.glob("*.json")):
+        try:
+            records.append(json.loads(p.read_text(encoding="utf-8")))
+        except Exception:
+            continue
+    records.sort(key=lambda r: r.get("timestamp", ""), reverse=True)
+    return {"count": len(records), "completed": records}

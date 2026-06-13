@@ -14,13 +14,29 @@ export async function getHealth(): Promise<any> {
 export async function uploadForm(form: FormData): Promise<any> {
   const res = await fetch(`${API_BASE}/upload`, {
     method: "POST",
-    // IMPORTANT: do NOT set Content-Type manually when sending FormData in RN
     body: form,
   });
+
   if (!res.ok) {
     const txt = await res.text().catch(() => "");
     throw new Error(`Upload failed (${res.status}): ${txt}`);
   }
+
   return res.json();
 }
 
+export async function getCompleted(): Promise<{
+  count: number;
+  completed: any[];
+}> {
+  const res = await fetch(`${API_BASE}/completed`);
+
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    throw new Error(`Completed fetch failed (${res.status}): ${txt}`);
+  }
+
+  return res.json();
+}
+
+export { API_BASE };

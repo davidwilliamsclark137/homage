@@ -13,6 +13,7 @@ export default function Home() {
         <Link href="/capture" style={styles.link}>📷 Capture</Link>
         <Link href="/map" style={styles.link}>📍 Show my location</Link>
         <Link href="/game" style={styles.link}>🗺️ Explore game (auto-spawn)</Link>
+	<Link href="/completed" style={styles.link}>✅ Completed Quests</Link>
         <Link href="/health" style={styles.link}>❤️ Backend health</Link>
       </View>
 
