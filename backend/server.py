@@ -177,23 +177,21 @@ async def generate_maze(payload: dict):
 @app.get("/maze/test-osm")
 def test_osm():
     query = """
-    [out:json];
-    (
-      way["highway"]
-      (33.196,-96.618,33.198,-96.614);
-    );
+    [out:json][timeout:25];
+    way["highway"](33.196,-96.618,33.198,-96.614);
     out geom;
     """
 
-    r = requests.post(
-        "https://overpass-api.de/api/interpreter",
-        data=query,
-        timeout=30,
-    )
-
-    data = r.json()
-
-    return {
-        "status": "ok",
-        "elements": len(data.get("elements", []))
-    }
+    try:
+        r = requests.post(
+            "https://overpass-api.de/api/interpreter",
+            data={"data": query},
+            timeout=30,
+        )
+        return {
+            "status_code": r.status_code,
+            "text_preview": r.text[:500],
+            "elements": len(r.json().get("elements", [])) if r.ok else 0,
+        }
+    except Exception as e:
+        return {"error": str(e)}
