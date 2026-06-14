@@ -154,3 +154,21 @@ def complete():
             continue
     records.sort(key=lambda r: r.get("timestamp", ""), reverse=True)
     return {"count": len(records), "completed": records}
+
+@app.post("/maze/generate")
+async def generate_maze(payload: dict):
+    # For now this is a fake street-like route inside Downtown McKinney.
+    # Later this endpoint will use OpenStreetMap to generate the route.
+
+    return {
+        "status": "ok",
+        "source": "fake-hardcoded-v1",
+        "path": [
+            {"latitude": 33.19702, "longitude": -96.61435},
+            {"latitude": 33.19702, "longitude": -96.61535},
+            {"latitude": 33.19648, "longitude": -96.61535},
+            {"latitude": 33.19648, "longitude": -96.61615},
+            {"latitude": 33.19705, "longitude": -96.61615},
+            {"latitude": 33.19705, "longitude": -96.61735}
+        ]
+    }
