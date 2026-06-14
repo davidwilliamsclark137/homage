@@ -1,9 +1,10 @@
 # backend/server.py
 from __future__ import annotations
+from typing import Optional
 
 import json
-import datetime import dateime, timezone
-from import fastapi import Form
+from datetime import datetime, timezone
+from fastapi import Form
 
 import os
 from pathlib import Path
@@ -89,14 +90,14 @@ def healthz():
 @app.post("/upload")
 async def upload(
     file: UploadFile = File(...),
-    quest_id: str | None = Form(default=None),
-    quest_name: str | None = Form(default=None),
-    quest_description: str | None = Form(default=None),
-    quest_kind: str | None = Form(default=None),
-    latitude: str | None = Form(default=None),
-    longitude: str | None = Form(default=None),
-    target_latitude: str | None = Form(default=None),
-    target_longitude: str | None = Form(default=None),
+    quest_id: Optional[str]  = Form(default=None),
+    quest_name: Optional[str]  = Form(default=None),
+    quest_description: Optional[str] = Form(default=None),
+    quest_kind: Optional[str]  = Form(default=None),
+    latitude: Optional[str] = Form(default=None),
+    longitude: Optional[str] = Form(default=None),
+    target_latitude: Optional[str] = Form(default=None),
+    target_longitude: Optional[str] = Form(default=None),
 ):
     
     # small safety check
