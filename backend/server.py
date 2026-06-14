@@ -252,4 +252,4 @@ def test_osm():
         }
 
     except Exception as e:
-        return {"error": str(e)
+        return {"error": str(e)}
