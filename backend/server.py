@@ -142,7 +142,7 @@ def get_file(name: str):
     return FileResponse(path)
 
 @app.get("/completed")
-def completedc():
+def complete():
     records = []
     meta_dir = DATA_DIR / "meta"
 
