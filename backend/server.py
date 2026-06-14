@@ -185,13 +185,26 @@ def test_osm():
     try:
         r = requests.post(
             "https://overpass-api.de/api/interpreter",
-            data={"data": query},
+            data=query.encode("utf-8"),
+            headers={
+                "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+                "Accept": "application/json",
+                "User-Agent": "HomageMazePrototype/0.1",
+            },
             timeout=30,
         )
+
+        try:
+            data = r.json()
+        except Exception:
+            data = {"elements": []}
+
         return {
             "status_code": r.status_code,
+            "content_type": r.headers.get("content-type"),
             "text_preview": r.text[:500],
-            "elements": len(r.json().get("elements", [])) if r.ok else 0,
+            "elements": len(data.get("elements", [])),
         }
+
     except Exception as e:
         return {"error": str(e)}
