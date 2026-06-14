@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Optional
 
 import json
+import requests
 from datetime import datetime, timezone
 from fastapi import Form
 
@@ -13,6 +14,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
+
 
 # ---------- Storage resolution ----------
 def resolve_data_dir() -> Path:
@@ -171,4 +173,27 @@ async def generate_maze(payload: dict):
             {"latitude": 33.19705, "longitude": -96.61615},
             {"latitude": 33.19705, "longitude": -96.61735}
         ]
+    }
+@app.get("/maze/test-osm")
+def test_osm():
+    query = """
+    [out:json];
+    (
+      way["highway"]
+      (33.196,-96.618,33.198,-96.614);
+    );
+    out geom;
+    """
+
+    r = requests.post(
+        "https://overpass-api.de/api/interpreter",
+        data=query,
+        timeout=30,
+    )
+
+    data = r.json()
+
+    return {
+        "status": "ok",
+        "elements": len(data.get("elements", []))
     }
