@@ -159,21 +159,66 @@ def complete():
 
 @app.post("/maze/generate")
 async def generate_maze(payload: dict):
-    # For now this is a fake street-like route inside Downtown McKinney.
-    # Later this endpoint will use OpenStreetMap to generate the route.
+    query = """
+    [out:json][timeout:25];
+    way["highway"](33.196,-96.618,33.198,-96.614);
+    out geom;
+    """
+
+    r = requests.post(
+        "https://overpass-api.de/api/interpreter",
+        data=query.encode("utf-8"),
+        headers={
+            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+            "Accept": "application/json",
+            "User-Agent": "HomageMazePrototype/0.1",
+        },
+        timeout=30,
+    )
+
+    data = r.json()
+    ways = data.get("elements", [])
+
+    best_way = None
+    best_span = 0
+
+    for way in ways:
+        geometry = way.get("geometry", [])
+        if len(geometry) < 2:
+            continue
+
+        lons = [p["lon"] for p in geometry]
+        span = max(lons) - min(lons)
+
+        if span > best_span:
+            best_span = span
+            best_way = geometry
+
+    if not best_way:
+        return {
+            "status": "fallback",
+            "source": "fallback-hardcoded",
+            "path": [
+                {"latitude": 33.19702, "longitude": -96.61435},
+                {"latitude": 33.19702, "longitude": -96.61535},
+                {"latitude": 33.19648, "longitude": -96.61535},
+                {"latitude": 33.19648, "longitude": -96.61615},
+                {"latitude": 33.19705, "longitude": -96.61615},
+                {"latitude": 33.19705, "longitude": -96.61735},
+            ],
+        }
+
+    path = [
+        {"latitude": p["lat"], "longitude": p["lon"]}
+        for p in best_way
+    ]
 
     return {
         "status": "ok",
-        "source": "fake-hardcoded-v1",
-        "path": [
-            {"latitude": 33.19702, "longitude": -96.61435},
-            {"latitude": 33.19702, "longitude": -96.61535},
-            {"latitude": 33.19648, "longitude": -96.61535},
-            {"latitude": 33.19648, "longitude": -96.61615},
-            {"latitude": 33.19705, "longitude": -96.61615},
-            {"latitude": 33.19705, "longitude": -96.61735}
-        ]
+        "source": "osm-longest-east-west-way",
+        "path": path,
     }
+
 @app.get("/maze/test-osm")
 def test_osm():
     query = """
@@ -207,4 +252,4 @@ def test_osm():
         }
 
     except Exception as e:
-        return {"error": str(e)}
+        return {"error": str(e)
