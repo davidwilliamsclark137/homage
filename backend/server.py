@@ -157,6 +157,14 @@ def complete():
     records.sort(key=lambda r: r.get("timestamp", ""), reverse=True)
     return {"count": len(records), "completed": records}
 
+def point_inside_bounds(p, south, west, north, east):
+    return (
+        p["lat"] >= south
+        and p["lat"] <= north
+        and p["lon"] >= west
+        and p["lon"] <= east
+    )
+
 @app.post("/maze/generate")
 async def generate_maze(payload: dict):
     query = """
@@ -183,7 +191,10 @@ async def generate_maze(payload: dict):
     best_span = 0
 
     for way in ways:
-        geometry = way.get("geometry", [])
+     geometry = [
+    p for p in way.get("geometry", [])
+    if point_inside_bounds(p, 33.196, -96.618, 33.198, -96.614)
+     ]
         if len(geometry) < 2:
             continue
 
