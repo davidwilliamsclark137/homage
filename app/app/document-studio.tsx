@@ -27,6 +27,15 @@ import {
 } from "../lib/multiplayerSession";
 import { useStationaryAuthoringLocation } from "../hooks/useStationaryAuthoringLocation";
 import { saveDocumentArtifact } from "../lib/artifacts";
+import { haversine } from "../lib/geo";
+import {
+  createPlacedDocumentId,
+  decryptPlacedDocument,
+  EncryptedPlacedDocument,
+  encryptPlacedDocument,
+  PlacedDocumentPlaintext,
+  PlacedDocumentSecret,
+} from "../lib/placedDocumentEncryption";
 import { RGB_THEME } from "../lib/theme";
 
 type DocumentKind = "poem" | "prose_poem" | "short_story";
@@ -82,9 +91,17 @@ export default function DocumentStudioScreen() {
   const [puzzlePrompt, setPuzzlePrompt] = useState("");
   const [puzzleAnswer, setPuzzleAnswer] = useState("");
   const [documents, setDocuments] = useState<PublishedDocument[]>([]);
+  const [placedDocument, setPlacedDocument] =
+    useState<EncryptedPlacedDocument | null>(null);
+  const [placedDocumentSecret, setPlacedDocumentSecret] =
+    useState<PlacedDocumentSecret | null>(null);
+  const [decryptedPlacedDocument, setDecryptedPlacedDocument] =
+    useState<PlacedDocumentPlaintext | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
   const [publishing, setPublishing] = useState(false);
+  const [encrypting, setEncrypting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [encryptionError, setEncryptionError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const {
     accuracy,
@@ -153,6 +170,67 @@ export default function DocumentStudioScreen() {
       : typography === "mono"
         ? Platform.select({ ios: "Menlo", android: "monospace" })
         : undefined;
+  const currentLatLng = location
+    ? {
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+      }
+    : null;
+  const placedDistance =
+    placedDocument && currentLatLng
+      ? haversine(currentLatLng, {
+          latitude: placedDocument.latitude,
+          longitude: placedDocument.longitude,
+        })
+      : null;
+  const placedUnlockReady =
+    placedDocument !== null &&
+    placedDocumentSecret !== null &&
+    placedDistance !== null &&
+    placedDistance <= placedDocument.radiusMeters;
+  const canEncryptPlacedDocument =
+    Boolean(currentLatLng) && title.trim().length >= 1 && body.trim().length >= 10;
+
+  function createEncryptedPlacement() {
+    if (!currentLatLng || !canEncryptPlacedDocument) return;
+    setEncrypting(true);
+    setEncryptionError(null);
+    setDecryptedPlacedDocument(null);
+    try {
+      const metadata = {
+        id: createPlacedDocumentId(),
+        latitude: Number(currentLatLng.latitude.toFixed(7)),
+        longitude: Number(currentLatLng.longitude.toFixed(7)),
+        radiusMeters: 35,
+        createdAt: new Date().toISOString(),
+        documentKind: kind,
+      };
+      const result = encryptPlacedDocument(metadata, {
+        title: title.trim(),
+        byline: byline.trim() || profile?.playerName || "Anonymous",
+        body: body.trim(),
+      });
+      setPlacedDocument(result.encryptedDocument);
+      setPlacedDocumentSecret(result.secret);
+      setSuccess("Encrypted placed document created on this phone.");
+    } catch (caught) {
+      setEncryptionError(errorMessage(caught));
+    } finally {
+      setEncrypting(false);
+    }
+  }
+
+  function unlockPlacedDocument() {
+    if (!placedDocument || !placedDocumentSecret || !placedUnlockReady) return;
+    setEncryptionError(null);
+    try {
+      setDecryptedPlacedDocument(
+        decryptPlacedDocument(placedDocument, placedDocumentSecret),
+      );
+    } catch (caught) {
+      setEncryptionError(errorMessage(caught));
+    }
+  }
 
   async function publish() {
     if (!formReady || !profile || !location || accuracy === null) return;
@@ -405,6 +483,80 @@ export default function DocumentStudioScreen() {
               {body.trim() || "Your writing will appear here."}
             </Text>
           </View>
+
+          <Text style={styles.sectionTitle}>Placed encrypted document</Text>
+          <Text style={styles.encryptionCopy}>
+            Create a local encrypted package with visible GPS coordinates. The
+            package does not include the document key.
+          </Text>
+          <Pressable
+            disabled={!canEncryptPlacedDocument || encrypting}
+            onPress={createEncryptedPlacement}
+            style={[
+              styles.encryptButton,
+              (!canEncryptPlacedDocument || encrypting) && styles.disabled,
+            ]}
+          >
+            {encrypting ? (
+              <ActivityIndicator color={RGB_THEME.black} />
+            ) : (
+              <Text style={styles.encryptText}>Encrypt and place here</Text>
+            )}
+          </Pressable>
+          {placedDocument ? (
+            <View style={styles.encryptedPackage}>
+              <View style={styles.packageHeader}>
+                <Text style={styles.packageTitle}>Encrypted package</Text>
+                <Text style={styles.packageStatus}>LOCKED</Text>
+              </View>
+              <Text style={styles.packageLine}>
+                GPS {placedDocument.latitude.toFixed(6)},{" "}
+                {placedDocument.longitude.toFixed(6)}
+              </Text>
+              <Text style={styles.packageLine}>
+                Unlock radius {placedDocument.radiusMeters} m
+              </Text>
+              <Text style={styles.packageLine}>
+                Algorithm {placedDocument.algorithm}
+              </Text>
+              <Text numberOfLines={4} style={styles.ciphertext}>
+                {placedDocument.ciphertextHex}
+              </Text>
+              <Text style={styles.packageLine}>
+                Distance{" "}
+                {placedDistance === null
+                  ? "waiting for GPS"
+                  : `${Math.round(placedDistance)} m`}
+              </Text>
+              <Pressable
+                disabled={!placedUnlockReady}
+                onPress={unlockPlacedDocument}
+                style={[
+                  styles.unlockButton,
+                  !placedUnlockReady && styles.disabled,
+                ]}
+              >
+                <Text style={styles.unlockText}>Decrypt at location</Text>
+              </Pressable>
+            </View>
+          ) : null}
+          {decryptedPlacedDocument ? (
+            <View style={styles.decryptedPanel}>
+              <Text style={styles.decryptedKicker}>DECRYPTED LOCALLY</Text>
+              <Text style={styles.decryptedTitle}>
+                {decryptedPlacedDocument.title}
+              </Text>
+              <Text style={styles.decryptedByline}>
+                {decryptedPlacedDocument.byline}
+              </Text>
+              <Text style={styles.decryptedBody}>
+                {decryptedPlacedDocument.body}
+              </Text>
+            </View>
+          ) : null}
+          {encryptionError ? (
+            <Text style={styles.error}>{encryptionError}</Text>
+          ) : null}
 
           <Text style={styles.sectionTitle}>Artifact lock</Text>
           <Text style={styles.label}>Puzzle type</Text>
@@ -678,6 +830,85 @@ const styles = StyleSheet.create({
   previewByline: { fontSize: 11, marginTop: 6 },
   previewRule: { height: 2, marginVertical: 18, width: "100%" },
   previewBody: { fontSize: 14, lineHeight: 21 },
+  encryptionCopy: {
+    color: RGB_THEME.muted,
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: 8,
+  },
+  encryptButton: {
+    alignItems: "center",
+    backgroundColor: RGB_THEME.cyan,
+    borderRadius: 4,
+    justifyContent: "center",
+    marginTop: 14,
+    minHeight: 50,
+  },
+  encryptText: { color: RGB_THEME.black, fontSize: 14, fontWeight: "900" },
+  encryptedPackage: {
+    backgroundColor: RGB_THEME.surface,
+    borderColor: RGB_THEME.border,
+    borderRadius: 4,
+    borderWidth: 1,
+    marginTop: 14,
+    padding: 14,
+  },
+  packageHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  packageTitle: { color: RGB_THEME.text, fontSize: 15, fontWeight: "900" },
+  packageStatus: { color: RGB_THEME.amber, fontSize: 11, fontWeight: "900" },
+  packageLine: {
+    color: RGB_THEME.muted,
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 7,
+  },
+  ciphertext: {
+    backgroundColor: RGB_THEME.black,
+    borderColor: RGB_THEME.border,
+    borderRadius: 4,
+    borderWidth: 1,
+    color: RGB_THEME.lime,
+    fontFamily: Platform.select({ ios: "Menlo", android: "monospace" }),
+    fontSize: 10,
+    lineHeight: 15,
+    marginTop: 10,
+    padding: 10,
+  },
+  unlockButton: {
+    alignItems: "center",
+    borderColor: RGB_THEME.lime,
+    borderRadius: 4,
+    borderWidth: 1,
+    justifyContent: "center",
+    marginTop: 12,
+    minHeight: 44,
+  },
+  unlockText: { color: RGB_THEME.lime, fontSize: 12, fontWeight: "900" },
+  decryptedPanel: {
+    borderColor: RGB_THEME.lime,
+    borderRadius: 4,
+    borderWidth: 1,
+    marginTop: 14,
+    padding: 14,
+  },
+  decryptedKicker: { color: RGB_THEME.lime, fontSize: 10, fontWeight: "900" },
+  decryptedTitle: {
+    color: RGB_THEME.text,
+    fontSize: 18,
+    fontWeight: "900",
+    marginTop: 8,
+  },
+  decryptedByline: { color: RGB_THEME.muted, fontSize: 12, marginTop: 4 },
+  decryptedBody: {
+    color: RGB_THEME.text,
+    fontSize: 14,
+    lineHeight: 21,
+    marginTop: 12,
+  },
   safetyRow: {
     alignItems: "center",
     borderBottomColor: RGB_THEME.border,
