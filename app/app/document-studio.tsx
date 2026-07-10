@@ -11,13 +11,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import {
-  BarcodeScanningResult,
-  CameraView,
-  useCameraPermissions,
-} from "expo-camera";
 import { SafeAreaView } from "react-native-safe-area-context";
-import QRCode from "react-native-qrcode-svg";
 
 import {
   createEncryptedPlacement as uploadEncryptedPlacementToBackend,
@@ -32,31 +26,28 @@ import { useStationaryAuthoringLocation } from "../hooks/useStationaryAuthoringL
 import { haversine } from "../lib/geo";
 import {
   createPlacedDocumentId,
-  decodePlacedDocumentTransfer,
   decryptPlacedDocument,
+  derivePlacedDocumentSecret,
   EncryptedPlacedDocument,
-  encodePlacedDocumentKey,
-  encryptPlacedDocument,
+  encryptPlacedDocumentWithSecret,
   PlacedDocumentPlaintext,
-  PlacedDocumentSecret,
 } from "../lib/placedDocumentEncryption";
 import { RGB_THEME } from "../lib/theme";
 
+const MIN_UNLOCK_PHRASE_LENGTH = 8;
+
 export default function DocumentStudioScreen() {
-  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [profile, setProfile] = useState<MultiplayerProfile | null>(null);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
+  const [unlockPhrase, setUnlockPhrase] = useState("");
   const [placedDocument, setPlacedDocument] =
     useState<EncryptedPlacedDocument | null>(null);
-  const [placedDocumentSecret, setPlacedDocumentSecret] =
-    useState<PlacedDocumentSecret | null>(null);
   const [decryptedDocument, setDecryptedDocument] =
     useState<PlacedDocumentPlaintext | null>(null);
   const [nearbyDocuments, setNearbyDocuments] = useState<
     NearbyEncryptedPlacedDocument[]
   >([]);
-  const [scannerOpen, setScannerOpen] = useState(false);
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [working, setWorking] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -99,17 +90,18 @@ export default function DocumentStudioScreen() {
           longitude: placedDocument.longitude,
         })
       : null;
+  const hasUsablePhrase =
+    unlockPhrase.trim().length >= MIN_UNLOCK_PHRASE_LENGTH;
   const canEncrypt =
-    Boolean(currentLatLng) && title.trim().length > 0 && body.trim().length >= 10;
+    Boolean(currentLatLng) &&
+    title.trim().length > 0 &&
+    body.trim().length >= 10 &&
+    hasUsablePhrase;
   const canDecrypt =
     placedDocument !== null &&
-    placedDocumentSecret !== null &&
+    hasUsablePhrase &&
     distanceToPlacedDocument !== null &&
     distanceToPlacedDocument <= placedDocument.radiusMeters;
-  const keyQrValue =
-    placedDocument && placedDocumentSecret
-      ? encodePlacedDocumentKey(placedDocument, placedDocumentSecret)
-      : null;
 
   function resetStatus() {
     setError(null);
@@ -130,14 +122,18 @@ export default function DocumentStudioScreen() {
         createdAt: new Date().toISOString(),
         documentKind: "note",
       };
-      const result = encryptPlacedDocument(metadata, {
-        title: title.trim(),
-        byline: profile?.playerName ?? "Anonymous",
-        body: body.trim(),
-      });
-      setPlacedDocument(result.encryptedDocument);
-      setPlacedDocumentSecret(result.secret);
-      setMessage("Encrypted locally. The backend has not seen the key.");
+      const secret = derivePlacedDocumentSecret(metadata.id, unlockPhrase);
+      const encryptedDocument = encryptPlacedDocumentWithSecret(
+        metadata,
+        {
+          title: title.trim(),
+          byline: profile?.playerName ?? "Anonymous",
+          body: body.trim(),
+        },
+        secret,
+      );
+      setPlacedDocument(encryptedDocument);
+      setMessage("Encrypted locally with your unlock phrase.");
     } catch (caught) {
       setError(errorMessage(caught));
     } finally {
@@ -154,7 +150,7 @@ export default function DocumentStudioScreen() {
         creator_player_id: profile?.playerId ?? null,
         document: placedDocument,
       });
-      setMessage("Uploaded encrypted package. Backend has GPS + ciphertext only.");
+      setMessage("Uploaded locked package. Backend has GPS + ciphertext only.");
     } catch (caught) {
       setError(errorMessage(caught));
     } finally {
@@ -186,55 +182,22 @@ export default function DocumentStudioScreen() {
     const { distance_m: _distance, ...encryptedDocument } = document;
     resetStatus();
     setPlacedDocument(encryptedDocument);
-    setPlacedDocumentSecret(null);
     setDecryptedDocument(null);
-    setMessage("Loaded encrypted package. It is locked until you scan the key.");
-  }
-
-  async function openScanner() {
-    resetStatus();
-    if (!cameraPermission?.granted) {
-      const nextPermission = await requestCameraPermission();
-      if (!nextPermission.granted) {
-        setError("Camera permission is required to scan the key QR.");
-        return;
-      }
-    }
-    setScannerOpen(true);
-  }
-
-  function handleScan(result: BarcodeScanningResult) {
-    setScannerOpen(false);
-    resetStatus();
-    try {
-      const payload = decodePlacedDocumentTransfer(result.data);
-      if (payload.kind === "encrypted-placed-document") {
-        setPlacedDocument(payload.document);
-        setPlacedDocumentSecret(null);
-        setDecryptedDocument(null);
-        setMessage("Scanned encrypted package. It is still locked.");
-        return;
-      }
-      if (!placedDocument || payload.documentId !== placedDocument.id) {
-        throw new Error("This key does not match the loaded package.");
-      }
-      setPlacedDocumentSecret(payload.secret);
-      setMessage("Key loaded. Decrypt is enabled only inside the GPS radius.");
-    } catch (caught) {
-      setError(errorMessage(caught));
-    }
+    setMessage("Loaded locked package. Type the unlock phrase to decrypt.");
   }
 
   function decryptAtLocation() {
-    if (!placedDocument || !placedDocumentSecret || !canDecrypt) return;
+    if (!placedDocument || !canDecrypt) return;
     resetStatus();
+    setWorking("decrypt");
     try {
-      setDecryptedDocument(
-        decryptPlacedDocument(placedDocument, placedDocumentSecret),
-      );
+      const secret = derivePlacedDocumentSecret(placedDocument.id, unlockPhrase);
+      setDecryptedDocument(decryptPlacedDocument(placedDocument, secret));
       setMessage("Decrypted locally on this phone.");
-    } catch (caught) {
-      setError(errorMessage(caught));
+    } catch {
+      setError("Could not decrypt. Check the unlock phrase and GPS location.");
+    } finally {
+      setWorking(null);
     }
   }
 
@@ -291,7 +254,7 @@ export default function DocumentStudioScreen() {
 
           <View style={styles.step}>
             <Text style={styles.stepNumber}>1</Text>
-            <Text style={styles.stepTitle}>Write a short document</Text>
+            <Text style={styles.stepTitle}>Write and choose an unlock phrase</Text>
           </View>
           <TextInput
             maxLength={80}
@@ -313,6 +276,21 @@ export default function DocumentStudioScreen() {
             textAlignVertical="top"
             value={body}
           />
+          <TextInput
+            autoCapitalize="none"
+            autoCorrect={false}
+            maxLength={120}
+            onChangeText={setUnlockPhrase}
+            placeholder="Unlock phrase, at least 8 characters"
+            placeholderTextColor={RGB_THEME.dim}
+            secureTextEntry
+            selectionColor={RGB_THEME.cyan}
+            style={styles.input}
+            value={unlockPhrase}
+          />
+          <Text style={styles.muted}>
+            The phrase is not uploaded. Phone B must type the same phrase.
+          </Text>
 
           <View style={styles.step}>
             <Text style={styles.stepNumber}>2</Text>
@@ -400,55 +378,12 @@ export default function DocumentStudioScreen() {
 
           <View style={styles.step}>
             <Text style={styles.stepNumber}>4</Text>
-            <Text style={styles.stepTitle}>Share or scan the separate key</Text>
-          </View>
-          {keyQrValue ? (
-            <View style={styles.qrPanel}>
-              <Text style={styles.qrTitle}>Key QR from this phone</Text>
-              <View style={styles.qrBox}>
-                <QRCode
-                  backgroundColor="#FFFFFF"
-                  color="#000000"
-                  size={220}
-                  value={keyQrValue}
-                />
-              </View>
-            </View>
-          ) : (
-            <Text style={styles.muted}>
-              This phone does not have a key for the loaded package.
-            </Text>
-          )}
-          <ActionButton
-            disabled={scannerOpen}
-            label="Scan key QR"
-            onPress={() => void openScanner()}
-            tone="magenta"
-          />
-          {scannerOpen ? (
-            <View style={styles.scannerPanel}>
-              <CameraView
-                barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
-                facing="back"
-                onBarcodeScanned={handleScan}
-                style={styles.camera}
-              />
-              <Pressable
-                onPress={() => setScannerOpen(false)}
-                style={styles.closeScannerButton}
-              >
-                <Text style={styles.closeScannerText}>Close scanner</Text>
-              </Pressable>
-            </View>
-          ) : null}
-
-          <View style={styles.step}>
-            <Text style={styles.stepNumber}>5</Text>
-            <Text style={styles.stepTitle}>Decrypt only at the GPS location</Text>
+            <Text style={styles.stepTitle}>Decrypt with phrase at the location</Text>
           </View>
           <ActionButton
-            disabled={!canDecrypt}
+            disabled={!canDecrypt || working === "decrypt"}
             label="Decrypt at location"
+            loading={working === "decrypt"}
             onPress={decryptAtLocation}
             tone="lime"
           />
@@ -624,40 +559,6 @@ const styles = StyleSheet.create({
     marginTop: 10,
     padding: 10,
   },
-  qrPanel: {
-    alignItems: "center",
-    borderColor: RGB_THEME.border,
-    borderRadius: 4,
-    borderWidth: 1,
-    marginTop: 12,
-    padding: 14,
-  },
-  qrTitle: {
-    color: RGB_THEME.text,
-    fontSize: 12,
-    fontWeight: "900",
-    marginBottom: 12,
-    textAlign: "center",
-  },
-  qrBox: { backgroundColor: "#FFFFFF", borderRadius: 4, padding: 12 },
-  scannerPanel: {
-    borderColor: RGB_THEME.border,
-    borderRadius: 4,
-    borderWidth: 1,
-    height: 300,
-    marginTop: 12,
-    overflow: "hidden",
-  },
-  camera: { flex: 1 },
-  closeScannerButton: {
-    alignItems: "center",
-    backgroundColor: RGB_THEME.black,
-    borderTopColor: RGB_THEME.border,
-    borderTopWidth: 1,
-    justifyContent: "center",
-    minHeight: 44,
-  },
-  closeScannerText: { color: RGB_THEME.text, fontSize: 12, fontWeight: "900" },
   decrypted: {
     borderColor: RGB_THEME.lime,
     borderRadius: 4,

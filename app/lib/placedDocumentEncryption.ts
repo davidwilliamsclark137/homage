@@ -6,6 +6,8 @@ import {
   hexToBytes,
   randomBytes,
 } from "@noble/ciphers/utils.js";
+import { pbkdf2 } from "@noble/hashes/pbkdf2.js";
+import { sha256 } from "@noble/hashes/sha2.js";
 
 export type PlacedDocumentPublicMetadata = {
   id: string;
@@ -71,6 +73,41 @@ export function encryptPlacedDocument(
       documentKeyHex: bytesToHex(key),
     },
   };
+}
+
+export function encryptPlacedDocumentWithSecret(
+  metadata: PlacedDocumentPublicMetadata,
+  plaintext: PlacedDocumentPlaintext,
+  secret: PlacedDocumentSecret,
+): EncryptedPlacedDocument {
+  const nonce = randomBytes(24);
+  const cipher = xchacha20poly1305(
+    hexToBytes(secret.documentKeyHex),
+    nonce,
+    encodeMetadata(metadata),
+  );
+  const plaintextBytes = encodeText(JSON.stringify(plaintext));
+  const ciphertext = cipher.encrypt(plaintextBytes);
+
+  return {
+    ...metadata,
+    algorithm: "XChaCha20-Poly1305",
+    ciphertextHex: bytesToHex(ciphertext),
+    nonceHex: bytesToHex(nonce),
+  };
+}
+
+export function derivePlacedDocumentSecret(
+  documentId: string,
+  unlockPhrase: string,
+): PlacedDocumentSecret {
+  const key = pbkdf2(
+    sha256,
+    normalizeUnlockPhrase(unlockPhrase),
+    `homage-placed-document:v1:${documentId}`,
+    { c: 120_000, dkLen: 32 },
+  );
+  return { documentKeyHex: bytesToHex(key) };
 }
 
 export function decryptPlacedDocument(
@@ -195,4 +232,8 @@ function encodeText(value: string) {
 
 function decodeText(value: Uint8Array) {
   return new TextDecoder().decode(value);
+}
+
+function normalizeUnlockPhrase(value: string) {
+  return value.trim().normalize("NFKC");
 }
