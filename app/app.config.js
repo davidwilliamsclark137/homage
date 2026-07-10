@@ -13,7 +13,7 @@ module.exports = () => ({
     [
       "expo-camera",
       {
-        cameraPermission: "Allow Homage to show the live sky through your camera.",
+        cameraPermission: "Allow Homage to scan document transfer QR codes.",
         recordAudioAndroid: false,
       },
     ],
@@ -46,9 +46,10 @@ module.exports = () => ({
   },
   ios: {
     infoPlist: {
-      NSCameraUsageDescription: "Homage uses your camera to capture images.",
+      NSCameraUsageDescription:
+        "Homage uses your camera to scan document transfer QR codes.",
       NSLocationWhenInUseUsageDescription:
-        "Homage uses your position to generate nearby quests and align the sky.",
+        "Homage uses your position to place and unlock encrypted documents.",
     },
   },
   android: {

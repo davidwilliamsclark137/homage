@@ -12,7 +12,13 @@ import {
   TextInput,
   View,
 } from "react-native";
+import {
+  BarcodeScanningResult,
+  CameraView,
+  useCameraPermissions,
+} from "expo-camera";
 import { SafeAreaView } from "react-native-safe-area-context";
+import QRCode from "react-native-qrcode-svg";
 
 import {
   API_BASE,
@@ -30,8 +36,11 @@ import { saveDocumentArtifact } from "../lib/artifacts";
 import { haversine } from "../lib/geo";
 import {
   createPlacedDocumentId,
+  decodePlacedDocumentTransfer,
   decryptPlacedDocument,
   EncryptedPlacedDocument,
+  encodePlacedDocumentKey,
+  encodePlacedDocumentPackage,
   encryptPlacedDocument,
   PlacedDocumentPlaintext,
   PlacedDocumentSecret,
@@ -75,8 +84,11 @@ const PUZZLES: { id: PuzzleKind; label: string }[] = [
   { id: "word_puzzle", label: "Word puzzle" },
   { id: "clue", label: "Clue" },
 ];
+const MAX_QR_TRANSFER_CHARS = 1_800;
+type TransferQrMode = "package" | "key" | null;
 
 export default function DocumentStudioScreen() {
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [profile, setProfile] = useState<MultiplayerProfile | null>(null);
   const [safeAreaConfirmed, setSafeAreaConfirmed] = useState(false);
   const [title, setTitle] = useState("");
@@ -97,6 +109,8 @@ export default function DocumentStudioScreen() {
     useState<PlacedDocumentSecret | null>(null);
   const [decryptedPlacedDocument, setDecryptedPlacedDocument] =
     useState<PlacedDocumentPlaintext | null>(null);
+  const [transferQrMode, setTransferQrMode] = useState<TransferQrMode>(null);
+  const [scannerOpen, setScannerOpen] = useState(false);
   const [profileLoading, setProfileLoading] = useState(true);
   const [publishing, setPublishing] = useState(false);
   const [encrypting, setEncrypting] = useState(false);
@@ -190,6 +204,21 @@ export default function DocumentStudioScreen() {
     placedDistance <= placedDocument.radiusMeters;
   const canEncryptPlacedDocument =
     Boolean(currentLatLng) && title.trim().length >= 1 && body.trim().length >= 10;
+  const packageQrValue = placedDocument
+    ? encodePlacedDocumentPackage(placedDocument)
+    : null;
+  const keyQrValue =
+    placedDocument && placedDocumentSecret
+      ? encodePlacedDocumentKey(placedDocument, placedDocumentSecret)
+      : null;
+  const activeQrValue =
+    transferQrMode === "package"
+      ? packageQrValue
+      : transferQrMode === "key"
+        ? keyQrValue
+        : null;
+  const packageQrTooLarge =
+    packageQrValue !== null && packageQrValue.length > MAX_QR_TRANSFER_CHARS;
 
   function createEncryptedPlacement() {
     if (!currentLatLng || !canEncryptPlacedDocument) return;
@@ -212,6 +241,7 @@ export default function DocumentStudioScreen() {
       });
       setPlacedDocument(result.encryptedDocument);
       setPlacedDocumentSecret(result.secret);
+      setTransferQrMode("package");
       setSuccess("Encrypted placed document created on this phone.");
     } catch (caught) {
       setEncryptionError(errorMessage(caught));
@@ -227,6 +257,41 @@ export default function DocumentStudioScreen() {
       setDecryptedPlacedDocument(
         decryptPlacedDocument(placedDocument, placedDocumentSecret),
       );
+    } catch (caught) {
+      setEncryptionError(errorMessage(caught));
+    }
+  }
+
+  async function openScanner() {
+    setEncryptionError(null);
+    if (!cameraPermission?.granted) {
+      const nextPermission = await requestCameraPermission();
+      if (!nextPermission.granted) {
+        setEncryptionError("Camera permission is required to scan transfer QR codes.");
+        return;
+      }
+    }
+    setScannerOpen(true);
+  }
+
+  function handleTransferScan(result: BarcodeScanningResult) {
+    setScannerOpen(false);
+    setEncryptionError(null);
+    setDecryptedPlacedDocument(null);
+    try {
+      const payload = decodePlacedDocumentTransfer(result.data);
+      if (payload.kind === "encrypted-placed-document") {
+        setPlacedDocument(payload.document);
+        setPlacedDocumentSecret(null);
+        setTransferQrMode(null);
+        setSuccess("Encrypted package received. The document is still locked.");
+        return;
+      }
+      if (!placedDocument || payload.documentId !== placedDocument.id) {
+        throw new Error("This key does not match the current encrypted document.");
+      }
+      setPlacedDocumentSecret(payload.secret);
+      setSuccess("Document key received. Go to the GPS location to decrypt.");
     } catch (caught) {
       setEncryptionError(errorMessage(caught));
     }
@@ -519,9 +584,61 @@ export default function DocumentStudioScreen() {
               <Text style={styles.packageLine}>
                 Algorithm {placedDocument.algorithm}
               </Text>
+              <Text style={styles.packageLine}>
+                Package QR size {packageQrValue?.length ?? 0}/
+                {MAX_QR_TRANSFER_CHARS}
+              </Text>
               <Text numberOfLines={4} style={styles.ciphertext}>
                 {placedDocument.ciphertextHex}
               </Text>
+              <View style={styles.transferButtons}>
+                <Pressable
+                  disabled={packageQrTooLarge}
+                  onPress={() => setTransferQrMode("package")}
+                  style={[
+                    styles.transferButton,
+                    packageQrTooLarge && styles.disabled,
+                  ]}
+                >
+                  <Text style={styles.transferButtonText}>Package QR</Text>
+                </Pressable>
+                <Pressable
+                  disabled={!keyQrValue}
+                  onPress={() => setTransferQrMode("key")}
+                  style={[
+                    styles.transferButton,
+                    styles.keyButton,
+                    !keyQrValue && styles.disabled,
+                  ]}
+                >
+                  <Text style={[styles.transferButtonText, styles.keyText]}>
+                    Key QR
+                  </Text>
+                </Pressable>
+              </View>
+              {packageQrTooLarge ? (
+                <Text style={styles.error}>
+                  This document is too large for the QR prototype. Shorten the
+                  text for this phone-to-phone test.
+                </Text>
+              ) : null}
+              {activeQrValue ? (
+                <View style={styles.qrPanel}>
+                  <Text style={styles.qrTitle}>
+                    {transferQrMode === "package"
+                      ? "Scan this first: encrypted package"
+                      : "Scan this second: document key"}
+                  </Text>
+                  <View style={styles.qrBox}>
+                    <QRCode
+                      backgroundColor="#FFFFFF"
+                      color="#000000"
+                      size={220}
+                      value={activeQrValue}
+                    />
+                  </View>
+                </View>
+              ) : null}
               <Text style={styles.packageLine}>
                 Distance{" "}
                 {placedDistance === null
@@ -540,6 +657,33 @@ export default function DocumentStudioScreen() {
               </Pressable>
             </View>
           ) : null}
+          <View style={styles.receivePanel}>
+            <Text style={styles.packageTitle}>Receive from another phone</Text>
+            <Text style={styles.encryptionCopy}>
+              Scan the package QR first. It will show GPS coordinates and
+              ciphertext, but no readable document text. Scan the key QR later
+              to make decryption possible at the location.
+            </Text>
+            <Pressable onPress={() => void openScanner()} style={styles.scanButton}>
+              <Text style={styles.scanText}>Scan transfer QR</Text>
+            </Pressable>
+            {scannerOpen ? (
+              <View style={styles.scannerPanel}>
+                <CameraView
+                  barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
+                  facing="back"
+                  onBarcodeScanned={handleTransferScan}
+                  style={styles.camera}
+                />
+                <Pressable
+                  onPress={() => setScannerOpen(false)}
+                  style={styles.closeScannerButton}
+                >
+                  <Text style={styles.closeScannerText}>Close scanner</Text>
+                </Pressable>
+              </View>
+            ) : null}
+          </View>
           {decryptedPlacedDocument ? (
             <View style={styles.decryptedPanel}>
               <Text style={styles.decryptedKicker}>DECRYPTED LOCALLY</Text>
@@ -877,6 +1021,82 @@ const styles = StyleSheet.create({
     lineHeight: 15,
     marginTop: 10,
     padding: 10,
+  },
+  transferButtons: { flexDirection: "row", gap: 10, marginTop: 12 },
+  transferButton: {
+    alignItems: "center",
+    borderColor: RGB_THEME.cyan,
+    borderRadius: 4,
+    borderWidth: 1,
+    flex: 1,
+    justifyContent: "center",
+    minHeight: 42,
+  },
+  transferButtonText: {
+    color: RGB_THEME.cyan,
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  keyButton: { borderColor: RGB_THEME.magenta },
+  keyText: { color: RGB_THEME.magenta },
+  qrPanel: {
+    alignItems: "center",
+    borderColor: RGB_THEME.border,
+    borderRadius: 4,
+    borderWidth: 1,
+    marginTop: 12,
+    padding: 14,
+  },
+  qrTitle: {
+    color: RGB_THEME.text,
+    fontSize: 12,
+    fontWeight: "900",
+    marginBottom: 12,
+    textAlign: "center",
+  },
+  qrBox: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 4,
+    padding: 12,
+  },
+  receivePanel: {
+    backgroundColor: RGB_THEME.surface,
+    borderColor: RGB_THEME.border,
+    borderRadius: 4,
+    borderWidth: 1,
+    marginTop: 14,
+    padding: 14,
+  },
+  scanButton: {
+    alignItems: "center",
+    backgroundColor: RGB_THEME.magenta,
+    borderRadius: 4,
+    justifyContent: "center",
+    marginTop: 12,
+    minHeight: 46,
+  },
+  scanText: { color: RGB_THEME.black, fontSize: 13, fontWeight: "900" },
+  scannerPanel: {
+    borderColor: RGB_THEME.border,
+    borderRadius: 4,
+    borderWidth: 1,
+    height: 300,
+    marginTop: 12,
+    overflow: "hidden",
+  },
+  camera: { flex: 1 },
+  closeScannerButton: {
+    alignItems: "center",
+    backgroundColor: RGB_THEME.black,
+    borderTopColor: RGB_THEME.border,
+    borderTopWidth: 1,
+    justifyContent: "center",
+    minHeight: 44,
+  },
+  closeScannerText: {
+    color: RGB_THEME.text,
+    fontSize: 12,
+    fontWeight: "900",
   },
   unlockButton: {
     alignItems: "center",
