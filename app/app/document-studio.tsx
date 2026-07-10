@@ -316,7 +316,7 @@ export default function DocumentStudioScreen() {
 
           <View style={styles.step}>
             <Text style={styles.stepNumber}>3</Text>
-            <Text style={styles.stepTitle}>Find locked documents nearby</Text>
+            <Text style={styles.stepTitle}>Phone B: find locked documents nearby</Text>
           </View>
           <ActionButton
             disabled={!currentLatLng || working === "find"}
@@ -383,7 +383,7 @@ export default function DocumentStudioScreen() {
 
           <View style={styles.step}>
             <Text style={styles.stepNumber}>4</Text>
-            <Text style={styles.stepTitle}>Decrypt with phrase at the location</Text>
+            <Text style={styles.stepTitle}>Phone B: decrypt with phrase at location</Text>
           </View>
           <ActionButton
             disabled={!canDecrypt || working === "decrypt"}
