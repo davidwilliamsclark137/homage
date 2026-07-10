@@ -12,16 +12,10 @@ export default function RootLayout() {
         headerShadowVisible: false,
       }}
     >
-      <Stack.Screen name="index" options={{ title: "Homage" }} />
-      <Stack.Screen name="admin" options={{ title: "Admin Dashboard" }} />
-      <Stack.Screen name="pair-device" options={{ title: "Pair Device" }} />
-      <Stack.Screen name="terminal" options={{ title: "Terminal" }} />
-      <Stack.Screen name="artifacts" options={{ title: "Artifacts" }} />
-      <Stack.Screen name="ui-lab" options={{ title: "UI Lab" }} />
-      <Stack.Screen name="rainbow-bit" options={{ title: "8-bit Demo" }} />
+      <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen
         name="document-studio"
-        options={{ title: "Document Studio" }}
+        options={{ title: "Homage Document Studio" }}
       />
     </Stack>
   );

@@ -11,5 +11,12 @@
   "include": [
     "**/*.ts",
     "**/*.tsx"
+  ],
+  "exclude": [
+    "parked-routes/**",
+    "screens/**",
+    "state/**",
+    "hooks/useProgress.ts",
+    "hooks/useQuestSync.ts"
   ]
 }
