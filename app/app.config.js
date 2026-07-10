@@ -1,5 +1,6 @@
 // app.config.js — Homage
-const API_BASE = process.env.API_BASE || "https://homage-backend.onrender.com";
+const API_BASE =
+  process.env.API_BASE || "https://42c1-71-41-189-248.ngrok-free.app";
 
 module.exports = () => ({
   name: "Homage",
@@ -7,7 +8,29 @@ module.exports = () => ({
   owner: "davidwilliamsclark",
   privacy: "public",
   scheme: "homage",
-  plugins: ["expo-router"],
+  plugins: [
+    "expo-router",
+    [
+      "expo-camera",
+      {
+        cameraPermission: "Allow Homage to show the live sky through your camera.",
+        recordAudioAndroid: false,
+      },
+    ],
+    [
+      "expo-sensors",
+      {
+        motionPermission: "Allow Homage to align constellations as you move your phone.",
+      },
+    ],
+    [
+      "expo-audio",
+      {
+        microphonePermission: false,
+        recordAudioAndroid: false,
+      },
+    ],
+  ],
   version: "1.0.0",
 
   // ✅ Key change: use SDK runtime so Expo Go can load your updates
@@ -24,17 +47,15 @@ module.exports = () => ({
   ios: {
     infoPlist: {
       NSCameraUsageDescription: "Homage uses your camera to capture images.",
-      NSLocationWhenInUseUsageDescription: "Homage tags captures with GPS coordinates.",
-      // app.config.js (inside ios.infoPlist)
-      NSLocationWhenInUseUsageDescription: "Homage shows your position on a map to tag captures.",
-
+      NSLocationWhenInUseUsageDescription:
+        "Homage uses your position to generate nearby quests and align the sky.",
     },
   },
   android: {
-    permissions: ["android.permission.CAMERA", "android.permission.ACCESS_FINE_LOCATION"],
-    config: {
-      googleMaps: { apiKey: process.env.ANDROID_GOOGLE_MAPS_API_KEY || "YOUR_ANDROID_GOOGLE_MAPS_API_KEY" }
-    }
-    },
+    permissions: [
+      "android.permission.CAMERA",
+      "android.permission.ACCESS_COARSE_LOCATION",
+      "android.permission.ACCESS_FINE_LOCATION",
+    ],
+  },
 });
-

@@ -1,6 +1,12 @@
 // app/lib/api.ts
 import Constants from "expo-constants";
 
+type AppExtra = { API_BASE?: string };
+type LegacyManifest = { extra?: AppExtra };
+
+const expoExtra = Constants.expoConfig?.extra as AppExtra | undefined;
+const legacyExtra = (Constants.manifest as LegacyManifest | null)?.extra;
+
 /**
  * API base URL resolution stays identical to what you had:
  * 1) expoConfig.extra.API_BASE (EAS/app.config)
@@ -8,8 +14,8 @@ import Constants from "expo-constants";
  * 3) hard fallback to your Render backend
  */
 export const API_BASE: string =
-  (Constants?.expoConfig?.extra as any)?.API_BASE ??
-  (Constants?.manifest?.extra as any)?.API_BASE ??
+  expoExtra?.API_BASE ??
+  legacyExtra?.API_BASE ??
   "https://homage-backend.onrender.com";
 
 /** ---- Existing endpoints (unchanged) ---- */
@@ -132,4 +138,3 @@ export async function pingHealth(): Promise<boolean> {
     return false;
   }
 }
-

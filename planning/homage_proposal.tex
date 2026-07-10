@@ -1,0 +1,154 @@
+% Created 2026-07-05 Sun 13:10
+% Intended LaTeX compiler: pdflatex
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{graphicx}
+\usepackage{longtable}
+\usepackage{wrapfig}
+\usepackage{rotating}
+\usepackage[normalem]{ulem}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{capt-of}
+\usepackage{hyperref}
+\usepackage[margin=1in]{geometry}
+\usepackage{parskip}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\hypersetup{colorlinks=true, linkcolor=blue, urlcolor=blue}
+\author{David William Clark}
+\date{\today}
+\title{Homage Planning Notes\\\medskip
+\large Document Studio Direction}
+\hypersetup{
+ pdfauthor={David William Clark},
+ pdftitle={Homage Planning Notes},
+ pdfkeywords={},
+ pdfsubject={},
+ pdfcreator={Emacs 30.2 (Org mode 9.7.11)}, 
+ pdflang={English}}
+\begin{document}
+
+\maketitle
+\setcounter{tocdepth}{2}
+\tableofcontents
+
+\section{Purpose}
+\label{sec:org96b042a}
+
+Use this document to think through the next phase of Homage without needing to
+touch the app code. The current practical focus is the phone-first Document
+Studio experience. Hello
+\section{Current Focus}
+\label{sec:org2e0d8ab}
+
+\subsection{Phone app}
+\label{sec:org8f5f7aa}
+
+\begin{itemize}
+\item Document Studio should be the primary active experience.
+\item Desktop/web preview is useful for development but not the product focus right now.
+\item Sky, music, and quest studio work is parked for later.
+\end{itemize}
+\subsection{Local-first direction}
+\label{sec:org86b7367}
+
+\begin{itemize}
+\item SQLite remains the canonical metadata and event store.
+\item Large generated assets can remain file-backed: PDFs, \LaTeX{}, uploads, audio, and exported artifacts.
+\item Backend APIs should support local-first sync and publishing without making the app feel server-dependent.
+\end{itemize}
+\section{Working Questions}
+\label{sec:orgb408aeb}
+
+\subsection{Product}
+\label{sec:org784b880}
+
+\begin{itemize}
+\item Who is the first real user of Document Studio?
+\item What document should someone be able to make in under five minutes?
+\item What should feel magical on a phone instead of merely possible?
+\item What should be saved locally even when network access is unavailable?
+\end{itemize}
+\subsection{Writing flow}
+\label{sec:org0d5a3e7}
+
+\begin{itemize}
+\item What are the minimum fields needed to publish a useful document?
+\item Should the app begin with a blank page, a guided prompt, or a reusable template?
+\item How much \LaTeX{} control should be exposed to the user?
+\item What does "finished" mean: PDF, artifact, local library entry, shared drop, or all of these?
+\end{itemize}
+\subsection{Technical}
+\label{sec:orgee1fb43}
+
+\begin{itemize}
+\item Which document metadata belongs in SQLite?
+\item Which generated files belong on disk?
+\item What should the backend generate versus what the client can preview locally?
+\item What needs to work when the phone is remote over an Expo tunnel?
+\end{itemize}
+\section{Proposed Milestones}
+\label{sec:org3a882f8}
+
+\subsection{{\bfseries\sffamily TODO} Milestone 1: Clarify the core document loop}
+\label{sec:orgd6d9d7f}
+
+\begin{itemize}
+\item Open Document Studio on phone.
+\item Draft a document.
+\item Preview the design.
+\item Publish/generate a PDF.
+\item Save the result locally as an artifact.
+\end{itemize}
+\subsection{{\bfseries\sffamily TODO} Milestone 2: Make the document library useful}
+\label{sec:org41ad217}
+
+\begin{itemize}
+\item Browse previously generated documents.
+\item Reopen PDFs.
+\item Show saved source metadata.
+\item Make failures legible when backend or file access is unavailable.
+\end{itemize}
+\subsection{{\bfseries\sffamily TODO} Milestone 3: Improve templates}
+\label{sec:orgd6b5d76}
+
+\begin{itemize}
+\item Define a small set of opinionated document styles.
+\item Decide whether templates are code-defined, database-defined, or file-defined.
+\item Add one template that feels specific to Homage rather than generic.
+\end{itemize}
+\section{Decisions}
+\label{sec:org4952282}
+
+Record decisions here as they become real.
+
+\begin{center}
+\begin{tabular}{lll}
+Date & Decision & Reason\\
+\hline
+ &  & \\
+\end{tabular}
+\end{center}
+\section{Parking Lot}
+\label{sec:org6978b49}
+
+Ideas that matter, but not today.
+
+\begin{itemize}
+\item Live sky lens
+\item Map quests
+\item Quest Studio
+\item Song Studio
+\item Multiplayer exploration
+\item Desktop-focused publishing tools
+\end{itemize}
+\section{Notes}
+\label{sec:org5179f0c}
+
+Write freely below this line.
+\subsection{Scratch}
+\label{sec:orgd4b328f}
+\end{document}

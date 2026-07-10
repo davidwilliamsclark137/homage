@@ -1,0 +1,109 @@
+#+TITLE: Homage Planning Notes
+#+SUBTITLE: Document Studio Direction
+#+AUTHOR: David William Clark
+#+DATE: \today
+#+LANGUAGE: en
+#+OPTIONS: toc:2 num:t author:t date:t title:t
+#+STARTUP: overview
+#+TODO: TODO NEXT WAITING | DONE PARKED
+
+#+LATEX_CLASS: article
+#+LATEX_CLASS_OPTIONS: [11pt]
+#+LATEX_HEADER: \usepackage[margin=1in]{geometry}
+#+LATEX_HEADER: \usepackage{parskip}
+#+LATEX_HEADER: \usepackage{hyperref}
+#+LATEX_HEADER: \usepackage{xcolor}
+#+LATEX_HEADER: \usepackage{enumitem}
+#+LATEX_HEADER: \hypersetup{colorlinks=true, linkcolor=blue, urlcolor=blue}
+
+* Purpose
+
+Use this document to think through the next phase of Homage without needing to
+touch the app code. The current practical focus is the phone-first Document
+Studio experience.
+
+* Current Focus
+
+** Phone app
+
+- Document Studio should be the primary active experience.
+- Desktop/web preview is useful for development but not the product focus right now.
+- Sky, music, and quest studio work is parked for later.
+
+** Local-first direction
+
+- SQLite remains the canonical metadata and event store.
+- Large generated assets can remain file-backed: PDFs, LaTeX, uploads, audio, and exported artifacts.
+- Backend APIs should support local-first sync and publishing without making the app feel server-dependent.
+
+* Working Questions
+
+** Product
+
+- Who is the first real user of Document Studio?
+- What document should someone be able to make in under five minutes?
+- What should feel magical on a phone instead of merely possible?
+- What should be saved locally even when network access is unavailable?
+
+** Writing flow
+
+- What are the minimum fields needed to publish a useful document?
+- Should the app begin with a blank page, a guided prompt, or a reusable template?
+- How much LaTeX control should be exposed to the user?
+- What does "finished" mean: PDF, artifact, local library entry, shared drop, or all of these?
+
+** Technical
+
+- Which document metadata belongs in SQLite?
+- Which generated files belong on disk?
+- What should the backend generate versus what the client can preview locally?
+- What needs to work when the phone is remote over an Expo tunnel?
+
+* Proposed Milestones
+
+** TODO Milestone 1: Clarify the core document loop
+
+- Open Document Studio on phone.
+- Draft a document.
+- Preview the design.
+- Publish/generate a PDF.
+- Save the result locally as an artifact.
+
+** TODO Milestone 2: Make the document library useful
+
+- Browse previously generated documents.
+- Reopen PDFs.
+- Show saved source metadata.
+- Make failures legible when backend or file access is unavailable.
+
+** TODO Milestone 3: Improve templates
+
+- Define a small set of opinionated document styles.
+- Decide whether templates are code-defined, database-defined, or file-defined.
+- Add one template that feels specific to Homage rather than generic.
+
+* Decisions
+
+Record decisions here as they become real.
+
+| Date | Decision | Reason |
+|------+----------+--------|
+|      |          |        |
+
+* Parking Lot
+
+Ideas that matter, but not today.
+
+- Live sky lens
+- Map quests
+- Quest Studio
+- Song Studio
+- Multiplayer exploration
+- Desktop-focused publishing tools
+
+* Notes
+
+Write freely below this line.
+
+** Scratch
+
