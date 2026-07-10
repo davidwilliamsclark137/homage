@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -237,6 +238,32 @@ export default function DocumentStudioScreen() {
     }
   }
 
+  async function openPhoneMap() {
+    if (!placedDocument) return;
+    resetStatus();
+    const label = encodeURIComponent("Homage encrypted document");
+    const latitude = placedDocument.latitude;
+    const longitude = placedDocument.longitude;
+    const url = Platform.select({
+      ios: `maps://?ll=${latitude},${longitude}&q=${label}`,
+      android: `geo:0,0?q=${latitude},${longitude}(${label})`,
+      default: openStreetMapUrl(latitude, longitude),
+    });
+    try {
+      await Linking.openURL(url);
+    } catch {
+      await Linking.openURL(openStreetMapUrl(latitude, longitude));
+    }
+  }
+
+  async function openOpenStreetMap() {
+    if (!placedDocument) return;
+    resetStatus();
+    await Linking.openURL(
+      openStreetMapUrl(placedDocument.latitude, placedDocument.longitude),
+    );
+  }
+
   if (loadingProfile || locationLoading) {
     return (
       <View style={styles.center}>
@@ -352,6 +379,19 @@ export default function DocumentStudioScreen() {
                   ? "waiting for GPS"
                   : `${Math.round(distanceToPlacedDocument)} m`}
               </Text>
+              <View style={styles.mapButtons}>
+                <Pressable onPress={() => void openPhoneMap()} style={styles.mapButton}>
+                  <Text style={styles.mapButtonText}>Open phone map</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => void openOpenStreetMap()}
+                  style={[styles.mapButton, styles.osmButton]}
+                >
+                  <Text style={[styles.mapButtonText, styles.osmButtonText]}>
+                    Open OSM
+                  </Text>
+                </Pressable>
+              </View>
               <Text numberOfLines={4} style={styles.ciphertext}>
                 {placedDocument.ciphertextHex}
               </Text>
@@ -464,6 +504,10 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
 
+function openStreetMapUrl(latitude: number, longitude: number) {
+  return `https://www.openstreetmap.org/?mlat=${latitude}&mlon=${longitude}#map=18/${latitude}/${longitude}`;
+}
+
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   screen: { backgroundColor: RGB_THEME.background, flex: 1 },
@@ -555,6 +599,19 @@ const styles = StyleSheet.create({
   },
   packageTitle: { color: RGB_THEME.text, fontSize: 14, fontWeight: "900" },
   muted: { color: RGB_THEME.muted, fontSize: 13, lineHeight: 19, marginTop: 5 },
+  mapButtons: { flexDirection: "row", gap: 10, marginTop: 12 },
+  mapButton: {
+    alignItems: "center",
+    borderColor: RGB_THEME.cyan,
+    borderRadius: 4,
+    borderWidth: 1,
+    flex: 1,
+    justifyContent: "center",
+    minHeight: 42,
+  },
+  mapButtonText: { color: RGB_THEME.cyan, fontSize: 12, fontWeight: "900" },
+  osmButton: { borderColor: RGB_THEME.magenta },
+  osmButtonText: { color: RGB_THEME.magenta },
   ciphertext: {
     backgroundColor: RGB_THEME.black,
     borderColor: RGB_THEME.border,
