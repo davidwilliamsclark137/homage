@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   KeyboardAvoidingView,
   Linking,
   Platform,
@@ -344,6 +345,10 @@ export default function DocumentStudioScreen() {
           {placedDocument ? (
             <View style={styles.package}>
               <Text style={styles.packageTitle}>Loaded encrypted package</Text>
+              <DocumentLocationMap
+                latitude={placedDocument.latitude}
+                longitude={placedDocument.longitude}
+              />
               <Text style={styles.muted}>
                 GPS {placedDocument.latitude.toFixed(6)},{" "}
                 {placedDocument.longitude.toFixed(6)}
@@ -435,8 +440,60 @@ function ActionButton({
   );
 }
 
+function DocumentLocationMap({
+  latitude,
+  longitude,
+}: {
+  latitude: number;
+  longitude: number;
+}) {
+  const zoom = 16;
+  const center = latLngToTile(latitude, longitude, zoom);
+  const tiles = [];
+  for (let row = -1; row <= 1; row += 1) {
+    for (let column = -1; column <= 1; column += 1) {
+      tiles.push({
+        key: `${row}:${column}`,
+        x: center.x + column,
+        y: center.y + row,
+      });
+    }
+  }
+
+  return (
+    <View style={styles.mapPreview}>
+      <View style={styles.tileGrid}>
+        {tiles.map((tile) => (
+          <Image
+            key={tile.key}
+            source={{
+              uri: `https://tile.openstreetmap.org/${zoom}/${tile.x}/${tile.y}.png`,
+            }}
+            style={styles.mapTile}
+          />
+        ))}
+      </View>
+      <View pointerEvents="none" style={styles.mapMarker}>
+        <View style={styles.markerDot} />
+      </View>
+    </View>
+  );
+}
+
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
+}
+
+function latLngToTile(latitude: number, longitude: number, zoom: number) {
+  const scale = 2 ** zoom;
+  const latRad = (latitude * Math.PI) / 180;
+  return {
+    x: Math.floor(((longitude + 180) / 360) * scale),
+    y: Math.floor(
+      ((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) *
+        scale,
+    ),
+  };
 }
 
 function openStreetMapUrl(latitude: number, longitude: number) {
@@ -534,6 +591,44 @@ const styles = StyleSheet.create({
   },
   packageTitle: { color: RGB_THEME.text, fontSize: 14, fontWeight: "900" },
   muted: { color: RGB_THEME.muted, fontSize: 13, lineHeight: 19, marginTop: 5 },
+  mapPreview: {
+    aspectRatio: 1.45,
+    backgroundColor: RGB_THEME.black,
+    borderColor: RGB_THEME.border,
+    borderRadius: 4,
+    borderWidth: 1,
+    marginTop: 12,
+    overflow: "hidden",
+    position: "relative",
+    width: "100%",
+  },
+  tileGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    height: "100%",
+    width: "100%",
+  },
+  mapTile: {
+    height: "33.3333%",
+    width: "33.3333%",
+  },
+  mapMarker: {
+    alignItems: "center",
+    bottom: 0,
+    justifyContent: "center",
+    left: 0,
+    position: "absolute",
+    right: 0,
+    top: 0,
+  },
+  markerDot: {
+    backgroundColor: RGB_THEME.magenta,
+    borderColor: RGB_THEME.text,
+    borderRadius: 10,
+    borderWidth: 2,
+    height: 20,
+    width: 20,
+  },
   mapButtons: { flexDirection: "row", gap: 10, marginTop: 12 },
   mapButton: {
     alignItems: "center",
