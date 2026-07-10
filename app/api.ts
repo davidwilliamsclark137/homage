@@ -261,6 +261,22 @@ export type PublishedSong = {
   puzzle_prompt: string;
 };
 
+export type EncryptedPlacedDocument = {
+  id: string;
+  latitude: number;
+  longitude: number;
+  radiusMeters: number;
+  createdAt: string;
+  documentKind: string;
+  algorithm: "XChaCha20-Poly1305";
+  ciphertextHex: string;
+  nonceHex: string;
+};
+
+export type NearbyEncryptedPlacedDocument = EncryptedPlacedDocument & {
+  distance_m: number;
+};
+
 export type QuestGenerationResponse = {
   status: string;
   source: string;
@@ -444,6 +460,53 @@ export async function getDocuments(
   );
   if (!response.ok) {
     throw new Error(`Document dashboard failed (${response.status})`);
+  }
+  return response.json();
+}
+
+export async function createEncryptedPlacement(payload: {
+  creator_player_id?: string | null;
+  document: EncryptedPlacedDocument;
+}): Promise<{ status: string; document: EncryptedPlacedDocument }> {
+  const response = await fetch(`${API_BASE}/encrypted-placements`, {
+    method: "POST",
+    headers: apiHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new Error(
+      body && typeof body.detail === "string"
+        ? body.detail
+        : `Encrypted placement upload failed (${response.status})`,
+    );
+  }
+  return response.json();
+}
+
+export async function getNearbyEncryptedPlacements(payload: {
+  latitude: number;
+  longitude: number;
+  radius_m?: number;
+  limit?: number;
+}): Promise<{ count: number; documents: NearbyEncryptedPlacedDocument[] }> {
+  const params = new URLSearchParams({
+    latitude: String(payload.latitude),
+    longitude: String(payload.longitude),
+    radius_m: String(payload.radius_m ?? 1_000),
+    limit: String(payload.limit ?? 20),
+  });
+  const response = await fetch(
+    `${API_BASE}/encrypted-placements/nearby?${params.toString()}`,
+    { headers: apiHeaders() },
+  );
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new Error(
+      body && typeof body.detail === "string"
+        ? body.detail
+        : `Encrypted placement discovery failed (${response.status})`,
+    );
   }
   return response.json();
 }

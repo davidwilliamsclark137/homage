@@ -23,7 +23,10 @@ import QRCode from "react-native-qrcode-svg";
 import {
   API_BASE,
   createDocument,
+  createEncryptedPlacement as uploadEncryptedPlacementToBackend,
+  getNearbyEncryptedPlacements,
   getDocuments,
+  NearbyEncryptedPlacedDocument,
   PuzzleKind,
   PublishedDocument,
 } from "../api";
@@ -109,11 +112,16 @@ export default function DocumentStudioScreen() {
     useState<PlacedDocumentSecret | null>(null);
   const [decryptedPlacedDocument, setDecryptedPlacedDocument] =
     useState<PlacedDocumentPlaintext | null>(null);
+  const [nearbyEncryptedDocuments, setNearbyEncryptedDocuments] = useState<
+    NearbyEncryptedPlacedDocument[]
+  >([]);
   const [transferQrMode, setTransferQrMode] = useState<TransferQrMode>(null);
   const [scannerOpen, setScannerOpen] = useState(false);
   const [profileLoading, setProfileLoading] = useState(true);
   const [publishing, setPublishing] = useState(false);
   const [encrypting, setEncrypting] = useState(false);
+  const [uploadingEncrypted, setUploadingEncrypted] = useState(false);
+  const [discoveringEncrypted, setDiscoveringEncrypted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [encryptionError, setEncryptionError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -260,6 +268,52 @@ export default function DocumentStudioScreen() {
     } catch (caught) {
       setEncryptionError(errorMessage(caught));
     }
+  }
+
+  async function uploadEncryptedPlacement() {
+    if (!placedDocument) return;
+    setUploadingEncrypted(true);
+    setEncryptionError(null);
+    try {
+      await uploadEncryptedPlacementToBackend({
+        creator_player_id: profile?.playerId ?? null,
+        document: placedDocument,
+      });
+      setSuccess("Encrypted package uploaded. Backend has coordinates and ciphertext only.");
+    } catch (caught) {
+      setEncryptionError(errorMessage(caught));
+    } finally {
+      setUploadingEncrypted(false);
+    }
+  }
+
+  async function discoverNearbyEncryptedPlacements() {
+    if (!currentLatLng) return;
+    setDiscoveringEncrypted(true);
+    setEncryptionError(null);
+    try {
+      const response = await getNearbyEncryptedPlacements({
+        latitude: currentLatLng.latitude,
+        longitude: currentLatLng.longitude,
+        radius_m: 2_000,
+        limit: 10,
+      });
+      setNearbyEncryptedDocuments(response.documents);
+      setSuccess(`${response.count} encrypted package(s) found nearby.`);
+    } catch (caught) {
+      setEncryptionError(errorMessage(caught));
+    } finally {
+      setDiscoveringEncrypted(false);
+    }
+  }
+
+  function selectNearbyEncryptedPlacement(document: NearbyEncryptedPlacedDocument) {
+    const { distance_m: _distance, ...encryptedDocument } = document;
+    setPlacedDocument(encryptedDocument);
+    setPlacedDocumentSecret(null);
+    setDecryptedPlacedDocument(null);
+    setTransferQrMode(null);
+    setSuccess("Nearby encrypted package loaded. It remains locked without a key.");
   }
 
   async function openScanner() {
@@ -554,20 +608,56 @@ export default function DocumentStudioScreen() {
             Create a local encrypted package with visible GPS coordinates. The
             package does not include the document key.
           </Text>
-          <Pressable
-            disabled={!canEncryptPlacedDocument || encrypting}
-            onPress={createEncryptedPlacement}
-            style={[
-              styles.encryptButton,
-              (!canEncryptPlacedDocument || encrypting) && styles.disabled,
-            ]}
-          >
-            {encrypting ? (
-              <ActivityIndicator color={RGB_THEME.black} />
-            ) : (
-              <Text style={styles.encryptText}>Encrypt and place here</Text>
-            )}
-          </Pressable>
+          <View style={styles.placementActions}>
+            <Pressable
+              disabled={!canEncryptPlacedDocument || encrypting}
+              onPress={createEncryptedPlacement}
+              style={[
+                styles.encryptButton,
+                (!canEncryptPlacedDocument || encrypting) && styles.disabled,
+              ]}
+            >
+              {encrypting ? (
+                <ActivityIndicator color={RGB_THEME.black} />
+              ) : (
+                <Text style={styles.encryptText}>Encrypt here</Text>
+              )}
+            </Pressable>
+            <Pressable
+              disabled={!currentLatLng || discoveringEncrypted}
+              onPress={() => void discoverNearbyEncryptedPlacements()}
+              style={[
+                styles.discoverButton,
+                (!currentLatLng || discoveringEncrypted) && styles.disabled,
+              ]}
+            >
+              {discoveringEncrypted ? (
+                <ActivityIndicator color={RGB_THEME.black} />
+              ) : (
+                <Text style={styles.discoverText}>Find nearby</Text>
+              )}
+            </Pressable>
+          </View>
+          {nearbyEncryptedDocuments.length ? (
+            <View style={styles.nearbyList}>
+              {nearbyEncryptedDocuments.map((document) => (
+                <Pressable
+                  key={document.id}
+                  onPress={() => selectNearbyEncryptedPlacement(document)}
+                  style={styles.nearbyRow}
+                >
+                  <View style={styles.documentText}>
+                    <Text style={styles.documentTitle}>{document.id}</Text>
+                    <Text style={styles.documentMeta}>
+                      {Math.round(document.distance_m)} m /{" "}
+                      {document.documentKind}
+                    </Text>
+                  </View>
+                  <Text style={styles.packageStatus}>LOCKED</Text>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
           {placedDocument ? (
             <View style={styles.encryptedPackage}>
               <View style={styles.packageHeader}>
@@ -639,6 +729,22 @@ export default function DocumentStudioScreen() {
                   </View>
                 </View>
               ) : null}
+              <Pressable
+                disabled={uploadingEncrypted}
+                onPress={() => void uploadEncryptedPlacement()}
+                style={[
+                  styles.uploadEncryptedButton,
+                  uploadingEncrypted && styles.disabled,
+                ]}
+              >
+                {uploadingEncrypted ? (
+                  <ActivityIndicator color={RGB_THEME.black} />
+                ) : (
+                  <Text style={styles.uploadEncryptedText}>
+                    Upload encrypted package
+                  </Text>
+                )}
+              </Pressable>
               <Text style={styles.packageLine}>
                 Distance{" "}
                 {placedDistance === null
@@ -980,15 +1086,40 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     marginTop: 8,
   },
+  placementActions: { flexDirection: "row", gap: 10, marginTop: 14 },
   encryptButton: {
     alignItems: "center",
     backgroundColor: RGB_THEME.cyan,
     borderRadius: 4,
+    flex: 1,
     justifyContent: "center",
-    marginTop: 14,
     minHeight: 50,
   },
   encryptText: { color: RGB_THEME.black, fontSize: 14, fontWeight: "900" },
+  discoverButton: {
+    alignItems: "center",
+    backgroundColor: RGB_THEME.amber,
+    borderRadius: 4,
+    flex: 1,
+    justifyContent: "center",
+    minHeight: 50,
+  },
+  discoverText: { color: RGB_THEME.black, fontSize: 14, fontWeight: "900" },
+  nearbyList: {
+    borderColor: RGB_THEME.border,
+    borderRadius: 4,
+    borderWidth: 1,
+    marginTop: 14,
+  },
+  nearbyRow: {
+    alignItems: "center",
+    borderTopColor: RGB_THEME.border,
+    borderTopWidth: 1,
+    flexDirection: "row",
+    gap: 10,
+    minHeight: 60,
+    padding: 12,
+  },
   encryptedPackage: {
     backgroundColor: RGB_THEME.surface,
     borderColor: RGB_THEME.border,
@@ -1058,6 +1189,19 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 4,
     padding: 12,
+  },
+  uploadEncryptedButton: {
+    alignItems: "center",
+    backgroundColor: RGB_THEME.lime,
+    borderRadius: 4,
+    justifyContent: "center",
+    marginTop: 12,
+    minHeight: 46,
+  },
+  uploadEncryptedText: {
+    color: RGB_THEME.black,
+    fontSize: 13,
+    fontWeight: "900",
   },
   receivePanel: {
     backgroundColor: RGB_THEME.surface,

@@ -244,6 +244,23 @@ class PairingCodeClaimRequest(BaseModel):
     player_name: str = Field(min_length=1, max_length=30)
 
 
+class EncryptedPlacedDocumentPayload(BaseModel):
+    id: str = Field(min_length=6, max_length=80)
+    latitude: float = Field(ge=-90, le=90)
+    longitude: float = Field(ge=-180, le=180)
+    radiusMeters: int = Field(ge=5, le=500)
+    createdAt: str = Field(min_length=8, max_length=80)
+    documentKind: str = Field(min_length=1, max_length=40)
+    algorithm: str = Field(pattern="^XChaCha20-Poly1305$")
+    ciphertextHex: str = Field(min_length=32, max_length=20_000)
+    nonceHex: str = Field(min_length=48, max_length=48)
+
+
+class EncryptedPlacedDocumentCreateRequest(BaseModel):
+    creator_player_id: Optional[str] = Field(default=None, min_length=8, max_length=80)
+    document: EncryptedPlacedDocumentPayload
+
+
 # ---------- Helpers ----------
 def invalid_filename(name: str) -> bool:
     return ".." in name or name.startswith("/")
@@ -1422,6 +1439,47 @@ def list_custom_quests(
     ]
     quests.sort(key=lambda quest: quest["created_at"], reverse=True)
     return {"count": len(quests), "quests": quests}
+
+
+@app.post("/encrypted-placements")
+def create_encrypted_placement(payload: EncryptedPlacedDocumentCreateRequest):
+    if hasattr(payload.document, "model_dump"):
+        document = payload.document.model_dump()
+    else:
+        document = payload.document.dict()
+    local_database.record_encrypted_placed_document(
+        DATA_DIR,
+        creator_player_id=payload.creator_player_id,
+        document=document,
+    )
+    local_database.record_sync_event(
+        DATA_DIR,
+        event_type="encrypted_placement_created",
+        payload={"document_id": document["id"], "document": document},
+        player_id=payload.creator_player_id,
+    )
+    return {"status": "created", "document": document}
+
+
+@app.get("/encrypted-placements/nearby")
+def list_nearby_encrypted_placements(
+    latitude: float = Query(ge=-90, le=90),
+    longitude: float = Query(ge=-180, le=180),
+    radius_m: int = Query(default=1_000, ge=25, le=10_000),
+    limit: int = Query(default=20, ge=1, le=50),
+):
+    nearby = []
+    for document in local_database.list_encrypted_placed_documents(DATA_DIR):
+        distance = distance_meters(
+            latitude,
+            longitude,
+            document["latitude"],
+            document["longitude"],
+        )
+        if distance <= radius_m:
+            nearby.append({**document, "distance_m": round(distance)})
+    nearby.sort(key=lambda document: document["distance_m"])
+    return {"count": len(nearby[:limit]), "documents": nearby[:limit]}
 
 
 @app.post("/documents")

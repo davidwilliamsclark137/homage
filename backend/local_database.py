@@ -110,6 +110,20 @@ def initialize_database(data_dir: Path) -> Path:
                 claimed_by_device_id TEXT,
                 FOREIGN KEY (account_id) REFERENCES local_accounts(account_id)
             );
+
+            CREATE TABLE IF NOT EXISTS encrypted_placed_documents (
+                document_id TEXT PRIMARY KEY,
+                creator_player_id TEXT,
+                latitude REAL NOT NULL,
+                longitude REAL NOT NULL,
+                radius_m REAL NOT NULL,
+                algorithm TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                document_kind TEXT NOT NULL,
+                ciphertext_hex TEXT NOT NULL,
+                nonce_hex TEXT NOT NULL,
+                payload_json TEXT NOT NULL
+            );
             """
         )
         connection.execute(
@@ -137,6 +151,7 @@ def database_status(data_dir: Path) -> dict[str, Any]:
                 "artifacts",
                 "sync_events",
                 "pairing_codes",
+                "encrypted_placed_documents",
             )
         }
         schema_version = connection.execute(
@@ -528,3 +543,67 @@ def record_sync_event(
         )
         connection.commit()
         return int(cursor.lastrowid)
+
+
+def record_encrypted_placed_document(
+    data_dir: Path,
+    *,
+    creator_player_id: str | None,
+    document: dict[str, Any],
+) -> dict[str, Any]:
+    initialize_database(data_dir)
+    row = {
+        "document_id": document["id"],
+        "creator_player_id": creator_player_id,
+        "latitude": document["latitude"],
+        "longitude": document["longitude"],
+        "radius_m": document["radiusMeters"],
+        "algorithm": document["algorithm"],
+        "created_at": document["createdAt"],
+        "document_kind": document["documentKind"],
+        "ciphertext_hex": document["ciphertextHex"],
+        "nonce_hex": document["nonceHex"],
+        "payload_json": json.dumps(document, sort_keys=True),
+    }
+    with _DB_LOCK, connect(data_dir) as connection:
+        connection.execute(
+            """
+            INSERT INTO encrypted_placed_documents (
+                document_id, creator_player_id, latitude, longitude, radius_m,
+                algorithm, created_at, document_kind, ciphertext_hex, nonce_hex,
+                payload_json
+            )
+            VALUES (
+                :document_id, :creator_player_id, :latitude, :longitude, :radius_m,
+                :algorithm, :created_at, :document_kind, :ciphertext_hex, :nonce_hex,
+                :payload_json
+            )
+            ON CONFLICT(document_id) DO UPDATE SET
+                creator_player_id = excluded.creator_player_id,
+                latitude = excluded.latitude,
+                longitude = excluded.longitude,
+                radius_m = excluded.radius_m,
+                algorithm = excluded.algorithm,
+                created_at = excluded.created_at,
+                document_kind = excluded.document_kind,
+                ciphertext_hex = excluded.ciphertext_hex,
+                nonce_hex = excluded.nonce_hex,
+                payload_json = excluded.payload_json
+            """,
+            row,
+        )
+        connection.commit()
+    return document
+
+
+def list_encrypted_placed_documents(data_dir: Path) -> list[dict[str, Any]]:
+    initialize_database(data_dir)
+    with _DB_LOCK, connect(data_dir) as connection:
+        rows = connection.execute(
+            """
+            SELECT payload_json
+            FROM encrypted_placed_documents
+            ORDER BY created_at DESC
+            """
+        ).fetchall()
+    return [json.loads(row["payload_json"]) for row in rows]
