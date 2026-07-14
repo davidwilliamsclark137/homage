@@ -33,6 +33,7 @@ def resolve_data_dir() -> Path:
         candidates.append(Path(env))
 
     candidates += [
+        Path("/data"),
         Path(__file__).resolve().parent / "data",
         Path("/var/data"),
         Path("/tmp/data"),
