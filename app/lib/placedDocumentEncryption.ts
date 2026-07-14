@@ -13,9 +13,18 @@ export type PlacedDocumentPublicMetadata = {
   id: string;
   latitude: number;
   longitude: number;
+  altitudeMeters?: number | null;
+  altitudeAccuracyMeters?: number | null;
+  altitudeToleranceMeters?: number | null;
   radiusMeters: number;
   createdAt: string;
   documentKind: string;
+  hint?: string;
+  checkpointId?: string;
+  checkpointName?: string;
+  checkpointLatitude?: number;
+  checkpointLongitude?: number;
+  checkpointRadiusMeters?: number;
 };
 
 export type EncryptedPlacedDocument = PlacedDocumentPublicMetadata & {
@@ -103,9 +112,18 @@ export function decryptPlacedDocument(
     id: encryptedDocument.id,
     latitude: encryptedDocument.latitude,
     longitude: encryptedDocument.longitude,
+    altitudeMeters: encryptedDocument.altitudeMeters,
+    altitudeAccuracyMeters: encryptedDocument.altitudeAccuracyMeters,
+    altitudeToleranceMeters: encryptedDocument.altitudeToleranceMeters,
     radiusMeters: encryptedDocument.radiusMeters,
     createdAt: encryptedDocument.createdAt,
     documentKind: encryptedDocument.documentKind,
+    hint: encryptedDocument.hint,
+    checkpointId: encryptedDocument.checkpointId,
+    checkpointName: encryptedDocument.checkpointName,
+    checkpointLatitude: encryptedDocument.checkpointLatitude,
+    checkpointLongitude: encryptedDocument.checkpointLongitude,
+    checkpointRadiusMeters: encryptedDocument.checkpointRadiusMeters,
   };
   const cipher = xchacha20poly1305(
     hexToBytes(secret.documentKeyHex),
@@ -126,15 +144,40 @@ function encodeMetadata(metadata: PlacedDocumentPublicMetadata) {
       id: metadata.id,
       latitude: roundCoordinate(metadata.latitude),
       longitude: roundCoordinate(metadata.longitude),
+      altitudeMeters:
+        typeof metadata.altitudeMeters === "number"
+          ? roundAltitude(metadata.altitudeMeters)
+          : null,
+      altitudeAccuracyMeters:
+        typeof metadata.altitudeAccuracyMeters === "number"
+          ? roundAltitude(metadata.altitudeAccuracyMeters)
+          : null,
+      altitudeToleranceMeters: metadata.altitudeToleranceMeters ?? null,
       radiusMeters: metadata.radiusMeters,
       createdAt: metadata.createdAt,
       documentKind: metadata.documentKind,
+      hint: metadata.hint ?? "",
+      checkpointId: metadata.checkpointId ?? "",
+      checkpointName: metadata.checkpointName ?? "",
+      checkpointLatitude:
+        typeof metadata.checkpointLatitude === "number"
+          ? roundCoordinate(metadata.checkpointLatitude)
+          : null,
+      checkpointLongitude:
+        typeof metadata.checkpointLongitude === "number"
+          ? roundCoordinate(metadata.checkpointLongitude)
+          : null,
+      checkpointRadiusMeters: metadata.checkpointRadiusMeters ?? null,
     }),
   );
 }
 
 function roundCoordinate(value: number) {
   return Number(value.toFixed(7));
+}
+
+function roundAltitude(value: number) {
+  return Number(value.toFixed(1));
 }
 
 function encodeText(value: string) {

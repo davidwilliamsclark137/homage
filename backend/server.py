@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Optional
 
 import requests
-from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Path as ApiPath, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel, Field
@@ -248,9 +248,18 @@ class EncryptedPlacedDocumentPayload(BaseModel):
     id: str = Field(min_length=6, max_length=80)
     latitude: float = Field(ge=-90, le=90)
     longitude: float = Field(ge=-180, le=180)
+    altitudeMeters: Optional[float] = Field(default=None)
+    altitudeAccuracyMeters: Optional[float] = Field(default=None, ge=0, le=500)
+    altitudeToleranceMeters: Optional[float] = Field(default=None, ge=5, le=500)
     radiusMeters: int = Field(ge=5, le=500)
     createdAt: str = Field(min_length=8, max_length=80)
     documentKind: str = Field(min_length=1, max_length=40)
+    hint: Optional[str] = Field(default=None, max_length=180)
+    checkpointId: Optional[str] = Field(default=None, max_length=80)
+    checkpointName: Optional[str] = Field(default=None, max_length=120)
+    checkpointLatitude: Optional[float] = Field(default=None, ge=-90, le=90)
+    checkpointLongitude: Optional[float] = Field(default=None, ge=-180, le=180)
+    checkpointRadiusMeters: Optional[int] = Field(default=None, ge=5, le=500)
     algorithm: str = Field(pattern="^XChaCha20-Poly1305$")
     ciphertextHex: str = Field(min_length=32, max_length=20_000)
     nonceHex: str = Field(min_length=48, max_length=48)
@@ -857,6 +866,23 @@ def healthz():
         "data_dir": str(DATA_DIR),
         "subdirs": [str(DATA_DIR / s) for s in SUBDIRS],
         "database": local_database.database_status(DATA_DIR),
+    }
+
+
+@app.get("/debug/routes")
+def debug_routes():
+    routes = []
+    for route in app.routes:
+        path = getattr(route, "path", None)
+        methods = sorted(getattr(route, "methods", []) or [])
+        if path:
+            routes.append({"path": path, "methods": methods})
+    routes.sort(key=lambda item: item["path"])
+    return {
+        "status": "ok",
+        "backend": "homage-local-dev",
+        "route_count": len(routes),
+        "routes": routes,
     }
 
 
@@ -1480,6 +1506,50 @@ def list_nearby_encrypted_placements(
             nearby.append({**document, "distance_m": round(distance)})
     nearby.sort(key=lambda document: document["distance_m"])
     return {"count": len(nearby[:limit]), "documents": nearby[:limit]}
+
+
+@app.get("/checkpoints/{checkpoint_id}/encrypted-placements")
+def list_checkpoint_encrypted_placements(
+    checkpoint_id: str = ApiPath(min_length=3, max_length=80),
+    latitude: float = Query(ge=-90, le=90),
+    longitude: float = Query(ge=-180, le=180),
+    limit: int = Query(default=20, ge=1, le=50),
+):
+    attached = []
+    for document in local_database.list_encrypted_placed_documents(DATA_DIR):
+        if document.get("checkpointId") != checkpoint_id:
+            continue
+        checkpoint_latitude = document.get("checkpointLatitude")
+        checkpoint_longitude = document.get("checkpointLongitude")
+        if not isinstance(checkpoint_latitude, (int, float)) or not isinstance(
+            checkpoint_longitude,
+            (int, float),
+        ):
+            continue
+        checkpoint_radius = document.get("checkpointRadiusMeters") or 75
+        checkpoint_distance = distance_meters(
+            latitude,
+            longitude,
+            checkpoint_latitude,
+            checkpoint_longitude,
+        )
+        if checkpoint_distance > checkpoint_radius:
+            continue
+        artifact_distance = distance_meters(
+            latitude,
+            longitude,
+            document["latitude"],
+            document["longitude"],
+        )
+        attached.append(
+            {
+                **document,
+                "checkpoint_distance_m": round(checkpoint_distance),
+                "artifact_distance_m": round(artifact_distance),
+            },
+        )
+    attached.sort(key=lambda document: document["artifact_distance_m"])
+    return {"count": len(attached[:limit]), "documents": attached[:limit]}
 
 
 @app.post("/documents")

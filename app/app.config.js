@@ -1,6 +1,8 @@
 // app.config.js — Homage
 const API_BASE =
-  process.env.API_BASE || "https://42c1-71-41-189-248.ngrok-free.app";
+  process.env.API_BASE || "https://homage-backend.onrender.com";
+const BUILD_LABEL =
+  process.env.HOMAGE_BUILD_LABEL || new Date().toISOString().slice(0, 19);
 
 module.exports = () => ({
   name: "Homage",
@@ -42,6 +44,7 @@ module.exports = () => ({
   },
   extra: {
     API_BASE,
+    BUILD_LABEL,
     eas: { projectId: "e8dd5376-de0c-45e6-bc68-ee6ddff3fc4d" },
   },
   ios: {

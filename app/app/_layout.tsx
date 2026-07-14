@@ -15,7 +15,7 @@ export default function RootLayout() {
       <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen
         name="document-studio"
-        options={{ title: "Homage Document Studio" }}
+        options={{ title: "artifact" }}
       />
     </Stack>
   );

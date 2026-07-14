@@ -6,6 +6,9 @@
   "scripts": {
     "start": "expo start",
     "start:tunnel": "expo start --tunnel -c",
+    "dev:phone": "../scripts/dev-phone.sh",
+    "dev:phone:tunnel": "HOMAGE_MODE=tunnel ../scripts/dev-phone.sh",
+    "dev:remote": "HOMAGE_MODE=remote ../scripts/dev-phone.sh",
     "publish": "eas update --branch production --message \"Publish from npm script\"",
     "publish:dev": "eas update --branch preview --message \"Dev preview\"",
     "login": "eas login",

@@ -2,16 +2,18 @@ import Constants from "expo-constants";
 
 import type { ChipSong } from "./lib/chipSong";
 
-type AppExtra = { API_BASE?: string };
+type AppExtra = { API_BASE?: string; BUILD_LABEL?: string };
 type LegacyManifest = { extra?: AppExtra };
 
 const expoExtra = Constants.expoConfig?.extra as AppExtra | undefined;
 const legacyExtra = (Constants.manifest as LegacyManifest | null)?.extra;
 
-const API_BASE: string =
+export const API_BASE: string =
   expoExtra?.API_BASE ??
   legacyExtra?.API_BASE ??
   "https://homage-backend.onrender.com";
+export const BUILD_LABEL: string =
+  expoExtra?.BUILD_LABEL ?? legacyExtra?.BUILD_LABEL ?? "development";
 
 const NGROK_SKIP_HEADER: Record<string, string> =
   API_BASE.includes("ngrok-free.app") || API_BASE.includes("ngrok.app")
@@ -265,9 +267,18 @@ export type EncryptedPlacedDocument = {
   id: string;
   latitude: number;
   longitude: number;
+  altitudeMeters?: number | null;
+  altitudeAccuracyMeters?: number | null;
+  altitudeToleranceMeters?: number | null;
   radiusMeters: number;
   createdAt: string;
   documentKind: string;
+  hint?: string;
+  checkpointId?: string;
+  checkpointName?: string;
+  checkpointLatitude?: number;
+  checkpointLongitude?: number;
+  checkpointRadiusMeters?: number;
   algorithm: "XChaCha20-Poly1305";
   ciphertextHex: string;
   nonceHex: string;
@@ -275,6 +286,12 @@ export type EncryptedPlacedDocument = {
 
 export type NearbyEncryptedPlacedDocument = EncryptedPlacedDocument & {
   distance_m: number;
+  checkpoint_distance_m?: number;
+};
+
+export type CheckpointEncryptedPlacedDocument = EncryptedPlacedDocument & {
+  checkpoint_distance_m: number;
+  artifact_distance_m: number;
 };
 
 export type QuestGenerationResponse = {
@@ -506,6 +523,49 @@ export async function getNearbyEncryptedPlacements(payload: {
       body && typeof body.detail === "string"
         ? body.detail
         : `Encrypted placement discovery failed (${response.status})`,
+    );
+  }
+  return response.json();
+}
+
+export async function getCheckpointEncryptedPlacements(payload: {
+  checkpoint_id: string;
+  latitude: number;
+  longitude: number;
+  limit?: number;
+}): Promise<{ count: number; documents: CheckpointEncryptedPlacedDocument[] }> {
+  const params = new URLSearchParams({
+    latitude: String(payload.latitude),
+    longitude: String(payload.longitude),
+    limit: String(payload.limit ?? 20),
+  });
+  const response = await fetch(
+    `${API_BASE}/checkpoints/${encodeURIComponent(payload.checkpoint_id)}/encrypted-placements?${params.toString()}`,
+    { headers: apiHeaders() },
+  );
+  if (response.status === 404) {
+    const fallback = await getNearbyEncryptedPlacements({
+      latitude: payload.latitude,
+      longitude: payload.longitude,
+      radius_m: 10_000,
+      limit: 50,
+    });
+    const documents = fallback.documents
+      .filter((document) => document.checkpointId === payload.checkpoint_id)
+      .slice(0, payload.limit ?? 20)
+      .map((document) => ({
+        ...document,
+        checkpoint_distance_m: document.checkpoint_distance_m ?? document.distance_m,
+        artifact_distance_m: document.distance_m,
+      }));
+    return { count: documents.length, documents };
+  }
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new Error(
+      body && typeof body.detail === "string"
+        ? body.detail
+        : `Checkpoint artifact discovery failed (${response.status})`,
     );
   }
   return response.json();
@@ -768,5 +828,3 @@ export async function generateMaze(payload: any): Promise<{
 
   return res.json();
 }
-
-export { API_BASE };
