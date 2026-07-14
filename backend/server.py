@@ -25,7 +25,26 @@ from backend.quests import SAFETY_POLICY_VERSION, generate_environment_quests
 
 
 # ---------- Storage resolution ----------
-def resolve_data_dir() -> Path:
+def inspect_data_dir_candidate(path: Path) -> dict[str, object]:
+    info: dict[str, object] = {
+        "path": str(path),
+        "exists": path.exists(),
+        "is_dir": path.is_dir(),
+        "writable": False,
+        "error": None,
+    }
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+        t = path / ".write_test"
+        t.write_text("ok", encoding="utf-8")
+        t.unlink(missing_ok=True)
+        info.update({"exists": path.exists(), "is_dir": path.is_dir(), "writable": True})
+    except Exception as exc:
+        info["error"] = f"{type(exc).__name__}: {exc}"
+    return info
+
+
+def data_dir_candidates() -> list[Path]:
     env = os.getenv("DATA_DIR")
     candidates = []
 
@@ -38,8 +57,11 @@ def resolve_data_dir() -> Path:
         Path("/var/data"),
         Path("/tmp/data"),
     ]
+    return candidates
 
-    for c in candidates:
+
+def resolve_data_dir() -> Path:
+    for c in data_dir_candidates():
         try:
             c.mkdir(parents=True, exist_ok=True)
             t = c / ".write_test"
@@ -865,6 +887,13 @@ def healthz():
     return {
         "status": "ok",
         "data_dir": str(DATA_DIR),
+        "storage": {
+            "DATA_DIR_env": os.getenv("DATA_DIR"),
+            "candidates": [
+                inspect_data_dir_candidate(candidate)
+                for candidate in data_dir_candidates()
+            ],
+        },
         "subdirs": [str(DATA_DIR / s) for s in SUBDIRS],
         "database": local_database.database_status(DATA_DIR),
     }
