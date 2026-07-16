@@ -124,6 +124,24 @@ def initialize_database(data_dir: Path) -> Path:
                 nonce_hex TEXT NOT NULL,
                 payload_json TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS secret_maze_destinations (
+                destination_id TEXT PRIMARY KEY,
+                creator_player_id TEXT,
+                label TEXT NOT NULL,
+                kind TEXT NOT NULL,
+                clue TEXT,
+                latitude REAL NOT NULL,
+                longitude REAL NOT NULL,
+                altitude_m REAL,
+                horizontal_accuracy_m REAL,
+                altitude_accuracy_m REAL,
+                altitude_tolerance_m REAL,
+                sample_count INTEGER NOT NULL,
+                calibrated_seconds REAL NOT NULL,
+                created_at TEXT NOT NULL,
+                payload_json TEXT NOT NULL
+            );
             """
         )
         connection.execute(
@@ -152,6 +170,7 @@ def database_status(data_dir: Path) -> dict[str, Any]:
                 "sync_events",
                 "pairing_codes",
                 "encrypted_placed_documents",
+                "secret_maze_destinations",
             )
         }
         schema_version = connection.execute(
@@ -603,6 +622,85 @@ def list_encrypted_placed_documents(data_dir: Path) -> list[dict[str, Any]]:
             """
             SELECT payload_json
             FROM encrypted_placed_documents
+            ORDER BY created_at DESC
+            """
+        ).fetchall()
+    return [json.loads(row["payload_json"]) for row in rows]
+
+
+def record_secret_maze_destination(
+    data_dir: Path,
+    *,
+    creator_player_id: str | None,
+    destination: dict[str, Any],
+) -> dict[str, Any]:
+    initialize_database(data_dir)
+    now = utc_now()
+    destination = {
+        **destination,
+        "created_at": destination.get("created_at") or now,
+    }
+    row = {
+        "destination_id": destination["id"],
+        "creator_player_id": creator_player_id,
+        "label": destination["label"],
+        "kind": destination["kind"],
+        "clue": destination.get("clue"),
+        "latitude": destination["latitude"],
+        "longitude": destination["longitude"],
+        "altitude_m": destination.get("altitude_m"),
+        "horizontal_accuracy_m": destination.get("horizontal_accuracy_m"),
+        "altitude_accuracy_m": destination.get("altitude_accuracy_m"),
+        "altitude_tolerance_m": destination.get("altitude_tolerance_m"),
+        "sample_count": destination.get("sample_count") or 1,
+        "calibrated_seconds": destination.get("calibrated_seconds") or 0,
+        "created_at": destination["created_at"],
+        "payload_json": json.dumps(destination, sort_keys=True),
+    }
+    with _DB_LOCK, connect(data_dir) as connection:
+        connection.execute(
+            """
+            INSERT INTO secret_maze_destinations (
+                destination_id, creator_player_id, label, kind, clue, latitude,
+                longitude, altitude_m, horizontal_accuracy_m, altitude_accuracy_m,
+                altitude_tolerance_m, sample_count, calibrated_seconds, created_at,
+                payload_json
+            )
+            VALUES (
+                :destination_id, :creator_player_id, :label, :kind, :clue,
+                :latitude, :longitude, :altitude_m, :horizontal_accuracy_m,
+                :altitude_accuracy_m, :altitude_tolerance_m, :sample_count,
+                :calibrated_seconds, :created_at, :payload_json
+            )
+            ON CONFLICT(destination_id) DO UPDATE SET
+                creator_player_id = excluded.creator_player_id,
+                label = excluded.label,
+                kind = excluded.kind,
+                clue = excluded.clue,
+                latitude = excluded.latitude,
+                longitude = excluded.longitude,
+                altitude_m = excluded.altitude_m,
+                horizontal_accuracy_m = excluded.horizontal_accuracy_m,
+                altitude_accuracy_m = excluded.altitude_accuracy_m,
+                altitude_tolerance_m = excluded.altitude_tolerance_m,
+                sample_count = excluded.sample_count,
+                calibrated_seconds = excluded.calibrated_seconds,
+                created_at = excluded.created_at,
+                payload_json = excluded.payload_json
+            """,
+            row,
+        )
+        connection.commit()
+    return destination
+
+
+def list_secret_maze_destinations(data_dir: Path) -> list[dict[str, Any]]:
+    initialize_database(data_dir)
+    with _DB_LOCK, connect(data_dir) as connection:
+        rows = connection.execute(
+            """
+            SELECT payload_json
+            FROM secret_maze_destinations
             ORDER BY created_at DESC
             """
         ).fetchall()

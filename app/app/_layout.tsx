@@ -17,6 +17,7 @@ export default function RootLayout() {
         name="document-studio"
         options={{ title: "artifact" }}
       />
+      <Stack.Screen name="secret-maze" options={{ title: "secret maze" }} />
     </Stack>
   );
 }

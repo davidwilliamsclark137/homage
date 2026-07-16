@@ -11,6 +11,8 @@ LOG_DIR="$ROOT_DIR/tmp/dev"
 MODE="${HOMAGE_MODE:-lan}"
 EXPO_TUNNEL_ATTEMPTS="${HOMAGE_EXPO_TUNNEL_ATTEMPTS:-3}"
 NGROK_BIN="${HOMAGE_NGROK_BIN:-/opt/homebrew/bin/ngrok}"
+RENDER_API_BASE="${HOMAGE_RENDER_API_BASE:-https://homage-backend.onrender.com}"
+BUILD_LABEL="${HOMAGE_BUILD_LABEL:-phone-dev}"
 
 mkdir -p "$LOG_DIR"
 
@@ -75,11 +77,11 @@ fi
 require_command npx
 
 if [[ "$MODE" == "remote" ]]; then
-  MODE="tunnel"
+  MODE="render"
 fi
 
-if [[ "$MODE" != "lan" && "$MODE" != "tunnel" ]]; then
-  printf 'Unsupported HOMAGE_MODE: %s\nUse HOMAGE_MODE=lan or HOMAGE_MODE=remote.\n' "$MODE" >&2
+if [[ "$MODE" != "lan" && "$MODE" != "tunnel" && "$MODE" != "render" ]]; then
+  printf 'Unsupported HOMAGE_MODE: %s\nUse HOMAGE_MODE=lan, HOMAGE_MODE=tunnel, or HOMAGE_MODE=remote.\n' "$MODE" >&2
   exit 1
 fi
 
@@ -103,16 +105,20 @@ if [[ "${HOMAGE_CLEAN_PORTS:-1}" == "1" ]]; then
   fi
 fi
 
-info "Starting FastAPI backend on port $BACKEND_PORT"
-(
-  cd "$ROOT_DIR"
-  python3 -m uvicorn backend.server:app --host 0.0.0.0 --port "$BACKEND_PORT"
-) >"$LOG_DIR/backend.log" 2>&1 &
-BACKEND_PID="$!"
+if [[ "$MODE" == "render" ]]; then
+  API_BASE="$RENDER_API_BASE"
+  EXPO_ARGS=(start --tunnel -c --port "$EXPO_PORT")
+  info "Using Render backend"
+  wait_for_url "$API_BASE/healthz" "Render backend"
+elif [[ "$MODE" == "tunnel" ]]; then
+  info "Starting FastAPI backend on port $BACKEND_PORT"
+  (
+    cd "$ROOT_DIR"
+    python3 -m uvicorn backend.server:app --host 0.0.0.0 --port "$BACKEND_PORT"
+  ) >"$LOG_DIR/backend.log" 2>&1 &
+  BACKEND_PID="$!"
 
-wait_for_url "http://127.0.0.1:$BACKEND_PORT/healthz" "Backend"
-
-if [[ "$MODE" == "tunnel" ]]; then
+  wait_for_url "http://127.0.0.1:$BACKEND_PORT/healthz" "Backend"
   info "Starting ngrok backend tunnel"
   "$NGROK_BIN" http "$BACKEND_PORT" --log=stdout >"$LOG_DIR/ngrok.log" 2>&1 &
   NGROK_PID="$!"
@@ -141,6 +147,14 @@ PY
   )"
   EXPO_ARGS=(start --tunnel -c --port "$EXPO_PORT")
 else
+  info "Starting FastAPI backend on port $BACKEND_PORT"
+  (
+    cd "$ROOT_DIR"
+    python3 -m uvicorn backend.server:app --host 0.0.0.0 --port "$BACKEND_PORT"
+  ) >"$LOG_DIR/backend.log" 2>&1 &
+  BACKEND_PID="$!"
+
+  wait_for_url "http://127.0.0.1:$BACKEND_PORT/healthz" "Backend"
   LAN_IP="$(
     ipconfig getifaddr en0 2>/dev/null \
       || ipconfig getifaddr en1 2>/dev/null \
@@ -151,18 +165,21 @@ else
 fi
 
 info "Backend API_BASE: $API_BASE"
+info "Build label: $BUILD_LABEL"
 info "Starting Expo"
-if [[ "$MODE" == "tunnel" ]]; then
-  info "Remote mode: open the exp.direct URL printed below in Expo Go."
+if [[ "$MODE" == "render" ]]; then
+  info "Remote mode: Render backend + Expo tunnel. Open the exp.direct URL printed below in Expo Go."
+elif [[ "$MODE" == "tunnel" ]]; then
+  info "Tunnel mode: local backend through ngrok. Use only when explicitly testing local backend changes."
 else
   info "LAN mode: open the Expo Go URL printed below. Phone and Mac must be on the same Wi-Fi."
 fi
 
 cd "$APP_DIR"
-if [[ "$MODE" == "tunnel" ]]; then
+if [[ "$MODE" == "render" || "$MODE" == "tunnel" ]]; then
   for ((attempt = 1; attempt <= EXPO_TUNNEL_ATTEMPTS; attempt++)); do
     info "Expo tunnel attempt $attempt of $EXPO_TUNNEL_ATTEMPTS"
-    if API_BASE="$API_BASE" npx expo "${EXPO_ARGS[@]}"; then
+    if API_BASE="$API_BASE" HOMAGE_BUILD_LABEL="$BUILD_LABEL" npx expo "${EXPO_ARGS[@]}"; then
       exit 0
     fi
     if [[ "$attempt" -lt "$EXPO_TUNNEL_ATTEMPTS" ]]; then
@@ -173,4 +190,4 @@ if [[ "$MODE" == "tunnel" ]]; then
   exit 1
 fi
 
-API_BASE="$API_BASE" npx expo "${EXPO_ARGS[@]}"
+API_BASE="$API_BASE" HOMAGE_BUILD_LABEL="$BUILD_LABEL" npx expo "${EXPO_ARGS[@]}"

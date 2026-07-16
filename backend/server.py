@@ -293,6 +293,27 @@ class EncryptedPlacedDocumentCreateRequest(BaseModel):
     document: EncryptedPlacedDocumentPayload
 
 
+class SecretMazeDestinationPayload(BaseModel):
+    id: str = Field(min_length=6, max_length=80)
+    label: str = Field(min_length=1, max_length=80)
+    kind: str = Field(default="secret", min_length=1, max_length=40)
+    clue: Optional[str] = Field(default=None, max_length=240)
+    latitude: float = Field(ge=-90, le=90)
+    longitude: float = Field(ge=-180, le=180)
+    altitude_m: Optional[float] = Field(default=None)
+    horizontal_accuracy_m: Optional[float] = Field(default=None, ge=0, le=500)
+    altitude_accuracy_m: Optional[float] = Field(default=None, ge=0, le=500)
+    altitude_tolerance_m: Optional[float] = Field(default=None, ge=5, le=500)
+    sample_count: int = Field(default=1, ge=1, le=120)
+    calibrated_seconds: float = Field(default=0, ge=0, le=300)
+    created_at: Optional[str] = Field(default=None, max_length=80)
+
+
+class SecretMazeDestinationCreateRequest(BaseModel):
+    creator_player_id: Optional[str] = Field(default=None, min_length=8, max_length=80)
+    destination: SecretMazeDestinationPayload
+
+
 # ---------- Helpers ----------
 def invalid_filename(name: str) -> bool:
     return ".." in name or name.startswith("/")
@@ -1894,6 +1915,32 @@ def unlock_artifact(payload: ArtifactUnlockRequest):
 
 
 # ---------- Maze / OSM ----------
+@app.post("/secret-maze/destinations")
+def create_secret_maze_destination(payload: SecretMazeDestinationCreateRequest):
+    if hasattr(payload.destination, "model_dump"):
+        destination = payload.destination.model_dump()
+    else:
+        destination = payload.destination.dict()
+    record = local_database.record_secret_maze_destination(
+        DATA_DIR,
+        creator_player_id=payload.creator_player_id,
+        destination=destination,
+    )
+    local_database.record_sync_event(
+        DATA_DIR,
+        event_type="secret_maze_destination_created",
+        payload={"destination_id": record["id"], "destination": record},
+        player_id=payload.creator_player_id,
+    )
+    return {"status": "created", "destination": record}
+
+
+@app.get("/secret-maze/destinations")
+def list_secret_maze_destinations():
+    destinations = local_database.list_secret_maze_destinations(DATA_DIR)
+    return {"count": len(destinations), "destinations": destinations}
+
+
 @app.post("/maze/generate")
 async def generate_maze(payload: dict):
     try:

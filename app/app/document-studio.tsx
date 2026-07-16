@@ -15,6 +15,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
 
 import {
   API_BASE,
@@ -62,6 +63,7 @@ const CHECKPOINT_RIDDLE_ANSWERS = [
 type AppMode = "creator" | "seeker";
 
 export default function DocumentStudioScreen() {
+  const router = useRouter();
   const [mode, setMode] = useState<AppMode>("creator");
   const [profile, setProfile] = useState<MultiplayerProfile | null>(null);
   const [playerName, setPlayerName] = useState("");
@@ -160,6 +162,14 @@ export default function DocumentStudioScreen() {
     distanceToPlacedDocument !== null &&
     distanceToPlacedDocument <= placedDocument.radiusMeters &&
     altitudeMatches;
+  const testStatusItems = [
+    { label: "GPS", passed: Boolean(currentLatLng) },
+    { label: "checkpoint", passed: mode === "creator" || isAtCheckpoint },
+    { label: "riddle", passed: mode === "creator" || riddleSolved },
+    { label: "sealed", passed: placedDocument !== null },
+    { label: "found", passed: mode === "creator" || nearbyDocuments.length > 0 },
+    { label: "decrypted", passed: decryptedDocument !== null },
+  ];
 
   function resetStatus() {
     setError(null);
@@ -392,7 +402,7 @@ export default function DocumentStudioScreen() {
         >
           <View style={styles.header}>
             <Text style={styles.kicker}>homage</Text>
-            <Text style={styles.title}>artifact</Text>
+            <Text style={styles.title}>document test bed</Text>
             <Text style={styles.status}>{gpsStatus}</Text>
             <Text numberOfLines={2} style={styles.apiBase}>
               API {API_BASE}
@@ -417,7 +427,7 @@ export default function DocumentStudioScreen() {
                   mode === "creator" && styles.modeButtonTextActive,
                 ]}
               >
-                Phone A: create
+                Phone A: create + publish
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -434,10 +444,26 @@ export default function DocumentStudioScreen() {
                   mode === "seeker" && styles.modeButtonTextActive,
                 ]}
               >
-                Phone B: find
+                Phone B: find + decrypt
               </Text>
             </TouchableOpacity>
           </View>
+
+          <View style={styles.testStatus}>
+            <Text style={styles.kicker}>test status</Text>
+            <View style={styles.statusGrid}>
+              {testStatusItems.map((item) => (
+                <StatusChip key={item.label} label={item.label} passed={item.passed} />
+              ))}
+            </View>
+          </View>
+
+          <Pressable
+            onPress={() => router.push("/secret-maze")}
+            style={styles.mazeLink}
+          >
+            <Text style={styles.mazeLinkText}>open secret maze test</Text>
+          </Pressable>
 
           <View style={styles.profileBox}>
             <Text style={styles.kicker}>phone identity</Text>
@@ -489,7 +515,7 @@ export default function DocumentStudioScreen() {
             <>
               <View style={styles.step}>
                 <Text style={styles.stepNumber}>1</Text>
-                <Text style={styles.stepTitle}>write artifact</Text>
+                <Text style={styles.stepTitle}>create</Text>
               </View>
               <TextInput
                 maxLength={80}
@@ -549,7 +575,7 @@ export default function DocumentStudioScreen() {
 
               <View style={styles.step}>
                 <Text style={styles.stepNumber}>2</Text>
-                <Text style={styles.stepTitle}>seal and publish</Text>
+                <Text style={styles.stepTitle}>publish</Text>
               </View>
               <View style={styles.requirements}>
                 <Requirement passed={Boolean(currentLatLng)} label="GPS coordinates" />
@@ -567,7 +593,7 @@ export default function DocumentStudioScreen() {
               <View style={styles.buttonRow}>
                 <ActionButton
                   disabled={working === "encrypt"}
-                  label="seal here"
+                  label="seal locally"
                   loading={working === "encrypt"}
                   onPress={encryptHere}
                   tone="cyan"
@@ -585,7 +611,7 @@ export default function DocumentStudioScreen() {
             <>
               <View style={styles.step}>
                 <Text style={styles.stepNumber}>1</Text>
-                <Text style={styles.stepTitle}>go to checkpoint</Text>
+                <Text style={styles.stepTitle}>checkpoint</Text>
               </View>
               <Text style={styles.muted}>
                 Phone B must be at {START_CHECKPOINT.name}. The backend only returns
@@ -636,7 +662,7 @@ export default function DocumentStudioScreen() {
 
               <View style={styles.step}>
                 <Text style={styles.stepNumber}>3</Text>
-                <Text style={styles.stepTitle}>request coordinates</Text>
+                <Text style={styles.stepTitle}>find</Text>
               </View>
               <View style={styles.requirements}>
                 <Requirement passed={Boolean(currentLatLng)} label="GPS coordinates" />
@@ -742,11 +768,11 @@ export default function DocumentStudioScreen() {
 
           <View style={styles.step}>
             <Text style={styles.stepNumber}>4</Text>
-            <Text style={styles.stepTitle}>open</Text>
+            <Text style={styles.stepTitle}>decrypt</Text>
           </View>
           <ActionButton
             disabled={!canDecrypt || working === "decrypt"}
-            label="open at location"
+            label="decrypt at location"
             loading={working === "decrypt"}
             onPress={decryptAtLocation}
             tone="lime"
@@ -775,6 +801,16 @@ function Requirement({ label, passed }: { label: string; passed: boolean }) {
     <Text style={[styles.requirement, passed ? styles.requirementOk : styles.requirementMissing]}>
       {passed ? "ok" : "need"} - {label}
     </Text>
+  );
+}
+
+function StatusChip({ label, passed }: { label: string; passed: boolean }) {
+  return (
+    <View style={[styles.statusChip, passed ? styles.statusChipOk : styles.statusChipNeed]}>
+      <Text style={[styles.statusChipText, passed && styles.statusChipTextOk]}>
+        {passed ? "ok" : "need"} {label}
+      </Text>
+    </View>
   );
 }
 
@@ -929,6 +965,57 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   modeButtonTextActive: { color: RGB_THEME.black },
+  testStatus: {
+    backgroundColor: RGB_THEME.surface,
+    borderColor: RGB_THEME.border,
+    borderRadius: 4,
+    borderWidth: 1,
+    marginTop: 14,
+    padding: 12,
+  },
+  statusGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 10,
+  },
+  statusChip: {
+    borderRadius: 4,
+    borderWidth: 1,
+    minHeight: 30,
+    justifyContent: "center",
+    paddingHorizontal: 9,
+  },
+  statusChipNeed: {
+    backgroundColor: RGB_THEME.surfaceRaised,
+    borderColor: RGB_THEME.border,
+  },
+  statusChipOk: {
+    backgroundColor: RGB_THEME.lime,
+    borderColor: RGB_THEME.lime,
+  },
+  statusChipText: {
+    color: RGB_THEME.muted,
+    fontSize: 10,
+    fontWeight: "900",
+    textTransform: "uppercase",
+  },
+  statusChipTextOk: { color: RGB_THEME.black },
+  mazeLink: {
+    alignItems: "center",
+    borderColor: RGB_THEME.magenta,
+    borderRadius: 4,
+    borderWidth: 1,
+    justifyContent: "center",
+    marginTop: 12,
+    minHeight: 42,
+  },
+  mazeLinkText: {
+    color: RGB_THEME.magenta,
+    fontSize: 12,
+    fontWeight: "900",
+    textTransform: "uppercase",
+  },
   profileBox: {
     backgroundColor: RGB_THEME.surface,
     borderColor: RGB_THEME.border,

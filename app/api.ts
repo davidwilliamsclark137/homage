@@ -828,3 +828,52 @@ export async function generateMaze(payload: any): Promise<{
 
   return res.json();
 }
+
+export type SecretMazeDestination = {
+  id: string;
+  label: string;
+  kind: string;
+  clue?: string | null;
+  latitude: number;
+  longitude: number;
+  altitude_m?: number | null;
+  horizontal_accuracy_m?: number | null;
+  altitude_accuracy_m?: number | null;
+  altitude_tolerance_m?: number | null;
+  sample_count: number;
+  calibrated_seconds: number;
+  created_at?: string | null;
+};
+
+export async function createSecretMazeDestination(payload: {
+  creator_player_id?: string | null;
+  destination: SecretMazeDestination;
+}): Promise<{ status: string; destination: SecretMazeDestination }> {
+  const response = await fetch(`${API_BASE}/secret-maze/destinations`, {
+    method: "POST",
+    headers: apiHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new Error(
+      body && typeof body.detail === "string"
+        ? body.detail
+        : `Secret destination save failed (${response.status})`,
+    );
+  }
+  return response.json();
+}
+
+export async function getSecretMazeDestinations(): Promise<{
+  count: number;
+  destinations: SecretMazeDestination[];
+}> {
+  const response = await fetch(`${API_BASE}/secret-maze/destinations`, {
+    headers: apiHeaders(),
+  });
+  if (!response.ok) {
+    throw new Error(`Secret destination list failed (${response.status})`);
+  }
+  return response.json();
+}
