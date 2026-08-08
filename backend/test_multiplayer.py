@@ -187,9 +187,47 @@ class MultiplayerTests(unittest.TestCase):
         self.assertEqual(feed["quests"][0]["id"], created["quest"]["id"])
         self.assertEqual(feed["quests"][0]["distance_m"], 0)
         self.assertTrue(feed["safety"]["community_stationary_confirmation"])
-
         dashboard = server.list_custom_quests("player-one")
         self.assertEqual(dashboard["count"], 1)
+
+    def test_two_player_message_hunt_completes_when_solver_opens_message(self):
+        document = {
+            "id": "placed-message-one",
+            "latitude": 32.96,
+            "longitude": -96.74,
+            "radiusMeters": 100,
+            "checkpointId": "richardson-heights",
+            "checkpointName": "Heights Recreation Center",
+            "checkpointLatitude": 32.96222,
+            "checkpointLongitude": -96.74562,
+            "checkpointRadiusMeters": 120,
+            "hint": "Find the green door",
+        }
+        with patch.object(server.local_database, "list_encrypted_placed_documents", return_value=[document]):
+            room = server.create_multiplayer_room(
+                server.RoomCreateRequest(
+                    player_id="player-one",
+                    player_name="Player 1",
+                    platform="ios",
+                    latitude=32.96,
+                    longitude=-96.74,
+                    mode="message_hunt",
+                    document_id=document["id"],
+                )
+            )
+        self.assertEqual(room["players"][0]["role"], "sender")
+        room = server.join_multiplayer_room(
+            room["code"],
+            server.RoomJoinRequest(player_id="player-two", player_name="Player 2", platform="android"),
+        )
+        self.assertEqual(room["status"], "active")
+        self.assertEqual(room["players"][1]["role"], "solver")
+        room = server.submit_multiplayer_action(
+            room["code"],
+            server.RoomActionRequest(player_id="player-two", quest_id=document["id"], action="message_opened"),
+        )
+        self.assertEqual(room["status"], "complete")
+        self.assertEqual(room["progress"]["opened_by"], "player-two")
 
     def test_document_template_escapes_latex_and_publishes_reading_quest(self):
         payload = server.DocumentCreateRequest(

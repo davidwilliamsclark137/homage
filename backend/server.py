@@ -203,7 +203,8 @@ class RoomCreateRequest(BaseModel):
     platform: str = Field(min_length=1, max_length=20)
     latitude: float = Field(ge=-90, le=90)
     longitude: float = Field(ge=-180, le=180)
-    mode: str = Field(default="signal_hunt", pattern="^(signal_hunt|hide_seek)$")
+    mode: str = Field(default="signal_hunt", pattern="^(signal_hunt|hide_seek|message_hunt)$")
+    document_id: Optional[str] = Field(default=None, min_length=6, max_length=100)
 
 
 class RoomJoinRequest(BaseModel):
@@ -215,7 +216,7 @@ class RoomJoinRequest(BaseModel):
 class RoomActionRequest(BaseModel):
     player_id: str = Field(min_length=8, max_length=80)
     quest_id: str = Field(min_length=1, max_length=160)
-    action: str = Field(pattern="^(melody|photo|sky)$")
+    action: str = Field(pattern="^(melody|photo|sky|message_opened)$")
     safe_area_confirmed: bool = False
 
 
@@ -768,12 +769,15 @@ def fresh_progress(room: dict) -> dict:
         if quest_index < len(room["quests"])
         else None
     )
-    return {
+    progress = {
         "quest_id": quest_id,
         "melody_by": None,
         "photo_by": None,
         "sky_by": [],
     }
+    if room.get("mode") == "message_hunt":
+        progress["opened_by"] = None
+    return progress
 
 
 def distance_meters(
@@ -1019,13 +1023,37 @@ def claim_pairing_code(code: str, payload: PairingCodeClaimRequest):
 
 @app.post("/multiplayer/rooms")
 def create_multiplayer_room(payload: RoomCreateRequest):
-    quest_response = generate_quest_feed(
-        latitude=payload.latitude,
-        longitude=payload.longitude,
-        radius_m=2_000,
-        limit=3,
-    )
-    quests = quest_response.get("quests", [])
+    if payload.mode == "message_hunt":
+        document = next(
+            (item for item in local_database.list_encrypted_placed_documents(DATA_DIR) if item.get("id") == payload.document_id),
+            None,
+        )
+        if not document:
+            raise HTTPException(status_code=404, detail="Encrypted message not found")
+        quests = [{
+            "id": document["id"],
+            "name": document.get("checkpointName") or "Encrypted message",
+            "description": document.get("hint") or "An encrypted message is waiting.",
+            "latitude": document.get("checkpointLatitude", document["latitude"]),
+            "longitude": document.get("checkpointLongitude", document["longitude"]),
+            "radius": document.get("checkpointRadiusMeters", document["radiusMeters"]),
+            "kind": "checkin",
+            "order": 1,
+            "category": "encrypted_message",
+            "source": "community",
+            "distance_m": 0,
+            "document_id": document["id"],
+            "checkpoint_id": document.get("checkpointId"),
+            "checkpoint_name": document.get("checkpointName"),
+        }]
+    else:
+        quest_response = generate_quest_feed(
+            latitude=payload.latitude,
+            longitude=payload.longitude,
+            radius_m=2_000,
+            limit=3,
+        )
+        quests = quest_response.get("quests", [])
     if not quests:
         raise HTTPException(status_code=503, detail="No quests could be generated")
 
@@ -1055,9 +1083,7 @@ def create_multiplayer_room(payload: RoomCreateRequest):
                     "id": payload.player_id,
                     "name": payload.player_name.strip(),
                     "platform": payload.platform,
-                    "role": (
-                        "hider" if payload.mode == "hide_seek" else "pathfinder"
-                    ),
+                    "role": ("hider" if payload.mode == "hide_seek" else "sender" if payload.mode == "message_hunt" else "pathfinder"),
                     "joined_at": now,
                 }
             },
@@ -1097,11 +1123,7 @@ def join_multiplayer_room(code: str, payload: RoomJoinRequest):
                 "id": payload.player_id,
                 "name": payload.player_name.strip(),
                 "platform": payload.platform,
-                "role": (
-                    "seeker"
-                    if room.get("mode") == "hide_seek"
-                    else "archivist"
-                ),
+                "role": ("seeker" if room.get("mode") == "hide_seek" else "solver" if room.get("mode") == "message_hunt" else "archivist"),
                 "joined_at": now,
             }
 
@@ -1122,6 +1144,23 @@ def get_multiplayer_room(code: str, player_id: Optional[str] = None):
 def submit_multiplayer_action(code: str, payload: RoomActionRequest):
     with ROOM_LOCK:
         room = read_room(code)
+        if room.get("mode") == "message_hunt":
+            player = room["players"].get(payload.player_id)
+            if not player:
+                raise HTTPException(status_code=403, detail="Player is not in this room")
+            if room["status"] == "waiting":
+                raise HTTPException(status_code=409, detail="Waiting for Player 2")
+            if payload.action != "message_opened" or payload.quest_id != room["progress"]["quest_id"]:
+                raise HTTPException(status_code=409, detail="This is not the active message")
+            if player["role"] != "solver":
+                raise HTTPException(status_code=403, detail="Only Player 2 can open the message")
+            room["progress"]["opened_by"] = payload.player_id
+            room["completed_ids"] = [payload.quest_id]
+            room["quest_index"] = 1
+            room["status"] = "complete"
+            room["updated_at"] = utc_now()
+            write_room(room)
+            return public_room(room, payload.player_id)
         if room.get("mode") != "signal_hunt":
             raise HTTPException(
                 status_code=409,
