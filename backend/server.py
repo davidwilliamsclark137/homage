@@ -203,7 +203,7 @@ class RoomCreateRequest(BaseModel):
     platform: str = Field(min_length=1, max_length=20)
     latitude: float = Field(ge=-90, le=90)
     longitude: float = Field(ge=-180, le=180)
-    mode: str = Field(default="signal_hunt", pattern="^(signal_hunt|hide_seek|message_hunt)$")
+    mode: str = Field(default="signal_hunt", pattern="^(signal_hunt|hide_seek|message_hunt|signal_saboteur)$")
     document_id: Optional[str] = Field(default=None, min_length=6, max_length=100)
 
 
@@ -218,6 +218,15 @@ class RoomActionRequest(BaseModel):
     quest_id: str = Field(min_length=1, max_length=160)
     action: str = Field(pattern="^(melody|photo|sky|message_opened)$")
     safe_area_confirmed: bool = False
+
+class SaboteurTurnRequest(BaseModel):
+    player_id: str = Field(min_length=8, max_length=80)
+    building_id: str = Field(min_length=2, max_length=40)
+    action: str = Field(pattern="^(investigate|stabilize|sabotage)$")
+
+class SaboteurAccuseRequest(BaseModel):
+    player_id: str = Field(min_length=8, max_length=80)
+    suspect: str = Field(pattern="^(player2|ghost)$")
 
 
 class HideSelectRequest(BaseModel):
@@ -728,6 +737,17 @@ def public_room(room: dict, player_id: Optional[str] = None) -> dict:
         "players": list(room["players"].values()),
         "progress": room["progress"],
     }
+    if room.get("mode") == "signal_saboteur":
+        player = room["players"].get(player_id)
+        state = room["saboteur"]
+        response["players"] = [{**item, "role": item["role"] if item["id"] == player_id else "operative"} for item in room["players"].values()]
+        response["saboteur"] = {
+            "round": state["round"], "max_rounds": 3, "events": state["events"],
+            "your_role": player["role"] if player else None,
+            "submitted": bool(player_id and state["pending"].get(player_id)),
+            "result": state.get("result") if room["status"] == "complete" else None,
+        }
+        return response
     if room.get("mode") != "hide_seek":
         return response
 
@@ -1023,7 +1043,10 @@ def claim_pairing_code(code: str, payload: PairingCodeClaimRequest):
 
 @app.post("/multiplayer/rooms")
 def create_multiplayer_room(payload: RoomCreateRequest):
-    if payload.mode == "message_hunt":
+    if payload.mode == "signal_saboteur":
+        names = ["Grand Hotel", "Shorty's Block", "Masonic Block", "Cloyd Block", "MPAC Square", "Magic Needle Block", "Antique Block", "Celt Block", "City Hall Edge"]
+        quests = [{"id": f"building-{index+1}", "name": name, "description": "Downtown building cell", "latitude": 33.1975, "longitude": -96.6155, "radius": 60, "kind": "checkin", "order": index+1, "category": "building", "source": "mckinney-board", "distance_m": 0} for index, name in enumerate(names)]
+    elif payload.mode == "message_hunt":
         document = next(
             (item for item in local_database.list_encrypted_placed_documents(DATA_DIR) if item.get("id") == payload.document_id),
             None,
@@ -1083,7 +1106,7 @@ def create_multiplayer_room(payload: RoomCreateRequest):
                     "id": payload.player_id,
                     "name": payload.player_name.strip(),
                     "platform": payload.platform,
-                    "role": ("hider" if payload.mode == "hide_seek" else "sender" if payload.mode == "message_hunt" else "pathfinder"),
+                    "role": ("investigator" if payload.mode == "signal_saboteur" else "hider" if payload.mode == "hide_seek" else "sender" if payload.mode == "message_hunt" else "pathfinder"),
                     "joined_at": now,
                 }
             },
@@ -1103,6 +1126,8 @@ def create_multiplayer_room(payload: RoomCreateRequest):
                 "found_by": None,
                 "sky_by": [],
             }
+        if payload.mode == "signal_saboteur":
+            room["saboteur"] = {"round": 1, "culprit": None, "pending": {}, "events": [], "result": None}
         write_room(room)
         return public_room(room, payload.player_id)
 
@@ -1123,12 +1148,16 @@ def join_multiplayer_room(code: str, payload: RoomJoinRequest):
                 "id": payload.player_id,
                 "name": payload.player_name.strip(),
                 "platform": payload.platform,
-                "role": ("seeker" if room.get("mode") == "hide_seek" else "solver" if room.get("mode") == "message_hunt" else "archivist"),
+                "role": ("explorer" if room.get("mode") == "signal_saboteur" else "seeker" if room.get("mode") == "hide_seek" else "solver" if room.get("mode") == "message_hunt" else "archivist"),
                 "joined_at": now,
             }
 
         if len(room["players"]) == 2 and room["status"] == "waiting":
             room["status"] = "active"
+            if room.get("mode") == "signal_saboteur":
+                culprit = secrets.choice(["player2", "ghost"])
+                room["saboteur"]["culprit"] = culprit
+                room["players"][payload.player_id]["role"] = "saboteur" if culprit == "player2" else "explorer"
         room["updated_at"] = utc_now()
         write_room(room)
         return public_room(room, payload.player_id)
@@ -1138,6 +1167,56 @@ def join_multiplayer_room(code: str, payload: RoomJoinRequest):
 def get_multiplayer_room(code: str, player_id: Optional[str] = None):
     with ROOM_LOCK:
         return public_room(read_room(code), player_id)
+
+@app.post("/multiplayer/rooms/{code}/saboteur/turn")
+def submit_saboteur_turn(code: str, payload: SaboteurTurnRequest):
+    with ROOM_LOCK:
+        room = read_room(code)
+        if room.get("mode") != "signal_saboteur" or room["status"] != "active":
+            raise HTTPException(status_code=409, detail="Saboteur game is not active")
+        player = room["players"].get(payload.player_id)
+        if not player:
+            raise HTTPException(status_code=403, detail="Player is not in this room")
+        if payload.building_id not in {q["id"] for q in room["quests"]}:
+            raise HTTPException(status_code=400, detail="Unknown building")
+        if player["role"] == "investigator" and payload.action != "investigate":
+            raise HTTPException(status_code=403, detail="Investigator must inspect")
+        if player["role"] == "explorer" and payload.action != "stabilize":
+            raise HTTPException(status_code=403, detail="Explorer must stabilize")
+        if player["role"] == "saboteur" and payload.action not in {"stabilize", "sabotage"}:
+            raise HTTPException(status_code=403, detail="Invalid saboteur action")
+        state = room["saboteur"]
+        state["pending"][payload.player_id] = {"building_id": payload.building_id, "action": payload.action}
+        if len(state["pending"]) == 2:
+            investigator = next(v for pid, v in state["pending"].items() if room["players"][pid]["role"] == "investigator")
+            operative = next(v for pid, v in state["pending"].items() if room["players"][pid]["role"] != "investigator")
+            ghost_building = room["quests"][(state["round"] * 3 + 1) % 9]["id"]
+            corrupted = operative["building_id"] if state["culprit"] == "player2" else ghost_building
+            inspected = investigator["building_id"]
+            if inspected == operative["building_id"]:
+                evidence = "Player 2 task verified clean." if state["culprit"] == "ghost" else "Player 2 record has a missing verification step."
+            elif inspected == corrupted:
+                evidence = "No human check-in is attached to this corruption." if state["culprit"] == "ghost" else "A fresh Player 2 trace is attached to this corruption."
+            else:
+                evidence = "No decisive trace was found here."
+            state["events"].append({"round": state["round"], "corrupted_building_id": corrupted, "inspected_building_id": inspected, "evidence": evidence})
+            state["round"] += 1
+            state["pending"] = {}
+        room["updated_at"] = utc_now(); write_room(room)
+        return public_room(room, payload.player_id)
+
+@app.post("/multiplayer/rooms/{code}/saboteur/accuse")
+def accuse_saboteur(code: str, payload: SaboteurAccuseRequest):
+    with ROOM_LOCK:
+        room = read_room(code); player = room["players"].get(payload.player_id)
+        if room.get("mode") != "signal_saboteur" or not player or player["role"] != "investigator":
+            raise HTTPException(status_code=403, detail="Only the investigator can accuse")
+        if room["saboteur"]["round"] <= 3:
+            raise HTTPException(status_code=409, detail="Complete three rounds first")
+        correct = payload.suspect == room["saboteur"]["culprit"]
+        room["saboteur"]["result"] = {"accused": payload.suspect, "culprit": room["saboteur"]["culprit"], "correct": correct}
+        room["status"] = "complete"; room["updated_at"] = utc_now(); write_room(room)
+        return public_room(room, payload.player_id)
 
 
 @app.post("/multiplayer/rooms/{code}/actions")
