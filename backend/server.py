@@ -203,7 +203,7 @@ class RoomCreateRequest(BaseModel):
     platform: str = Field(min_length=1, max_length=20)
     latitude: float = Field(ge=-90, le=90)
     longitude: float = Field(ge=-180, le=180)
-    mode: str = Field(default="signal_hunt", pattern="^(signal_hunt|hide_seek|message_hunt|signal_saboteur)$")
+    mode: str = Field(default="signal_hunt", pattern="^(signal_hunt|hide_seek|message_hunt|signal_saboteur|simulation)$")
     document_id: Optional[str] = Field(default=None, min_length=6, max_length=100)
 
 
@@ -227,6 +227,11 @@ class SaboteurTurnRequest(BaseModel):
 class SaboteurAccuseRequest(BaseModel):
     player_id: str = Field(min_length=8, max_length=80)
     suspect: str = Field(pattern="^(player2|ghost)$")
+
+class SimulationUpdateRequest(BaseModel):
+    player_id: str = Field(min_length=8, max_length=80)
+    module_id: str = Field(pattern="^(saboteur|square-three|hidden-maze|i-spy|message-hunt|bingo|tic-tac-toe)$")
+    step: int = Field(ge=0, le=20)
 
 
 class HideSelectRequest(BaseModel):
@@ -748,6 +753,9 @@ def public_room(room: dict, player_id: Optional[str] = None) -> dict:
             "result": state.get("result") if room["status"] == "complete" else None,
         }
         return response
+    if room.get("mode") == "simulation":
+        response["simulation"] = room["simulation"]
+        return response
     if room.get("mode") != "hide_seek":
         return response
 
@@ -1043,7 +1051,7 @@ def claim_pairing_code(code: str, payload: PairingCodeClaimRequest):
 
 @app.post("/multiplayer/rooms")
 def create_multiplayer_room(payload: RoomCreateRequest):
-    if payload.mode == "signal_saboteur":
+    if payload.mode in {"signal_saboteur", "simulation"}:
         names = ["Grand Hotel", "Shorty's Block", "Masonic Block", "Cloyd Block", "MPAC Square", "Magic Needle Block", "Antique Block", "Celt Block", "City Hall Edge"]
         quests = [{"id": f"building-{index+1}", "name": name, "description": "Downtown building cell", "latitude": 33.1975, "longitude": -96.6155, "radius": 60, "kind": "checkin", "order": index+1, "category": "building", "source": "mckinney-board", "distance_m": 0} for index, name in enumerate(names)]
     elif payload.mode == "message_hunt":
@@ -1106,7 +1114,7 @@ def create_multiplayer_room(payload: RoomCreateRequest):
                     "id": payload.player_id,
                     "name": payload.player_name.strip(),
                     "platform": payload.platform,
-                    "role": ("investigator" if payload.mode == "signal_saboteur" else "hider" if payload.mode == "hide_seek" else "sender" if payload.mode == "message_hunt" else "pathfinder"),
+                    "role": ("controller" if payload.mode == "simulation" else "investigator" if payload.mode == "signal_saboteur" else "hider" if payload.mode == "hide_seek" else "sender" if payload.mode == "message_hunt" else "pathfinder"),
                     "joined_at": now,
                 }
             },
@@ -1128,6 +1136,8 @@ def create_multiplayer_room(payload: RoomCreateRequest):
             }
         if payload.mode == "signal_saboteur":
             room["saboteur"] = {"round": 1, "culprit": None, "pending": {}, "events": [], "result": None}
+        if payload.mode == "simulation":
+            room["simulation"] = {"module_id": "saboteur", "step": 0, "revision": 0}
         write_room(room)
         return public_room(room, payload.player_id)
 
@@ -1148,7 +1158,7 @@ def join_multiplayer_room(code: str, payload: RoomJoinRequest):
                 "id": payload.player_id,
                 "name": payload.player_name.strip(),
                 "platform": payload.platform,
-                "role": ("explorer" if room.get("mode") == "signal_saboteur" else "seeker" if room.get("mode") == "hide_seek" else "solver" if room.get("mode") == "message_hunt" else "archivist"),
+                "role": ("viewer" if room.get("mode") == "simulation" else "explorer" if room.get("mode") == "signal_saboteur" else "seeker" if room.get("mode") == "hide_seek" else "solver" if room.get("mode") == "message_hunt" else "archivist"),
                 "joined_at": now,
             }
 
@@ -1167,6 +1177,18 @@ def join_multiplayer_room(code: str, payload: RoomJoinRequest):
 def get_multiplayer_room(code: str, player_id: Optional[str] = None):
     with ROOM_LOCK:
         return public_room(read_room(code), player_id)
+
+@app.post("/multiplayer/rooms/{code}/simulation")
+def update_simulation_room(code: str, payload: SimulationUpdateRequest):
+    with ROOM_LOCK:
+        room = read_room(code)
+        player = room["players"].get(payload.player_id)
+        if room.get("mode") != "simulation" or not player or player.get("role") != "controller":
+            raise HTTPException(status_code=403, detail="Only the simulation controller can change the shared state")
+        room["simulation"] = {"module_id": payload.module_id, "step": payload.step, "revision": room["simulation"].get("revision", 0) + 1}
+        room["updated_at"] = utc_now()
+        write_room(room)
+        return public_room(room, payload.player_id)
 
 @app.post("/multiplayer/rooms/{code}/saboteur/turn")
 def submit_saboteur_turn(code: str, payload: SaboteurTurnRequest):
