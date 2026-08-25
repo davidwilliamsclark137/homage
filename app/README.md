@@ -1,50 +1,60 @@
-# Welcome to your Expo app 👋
+# Homage mobile app
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Homage is an Expo/React Native exploration game. The app discovers nearby public hubs, supports encrypted two-player message hunts, and builds location-aware puzzles from curated city packs.
 
-## Get started
-
-1. Install dependencies
-
-   ```bash
-   npm install
-   ```
-
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+## Run locally
 
 ```bash
-npm run reset-project
+npm install
+npm run dev:render
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+`dev:render` uses the deployed Render backend. Keep credentials in the platform credential store or Render environment settings; do not add secrets to this repository.
 
-## Learn more
+## Project structure
 
-To learn more about developing your project with Expo, look at the following resources:
+```text
+app/                  Expo Router entry points only
+features/
+  mckinney/
+    data/             Sourced location records
+    puzzles/          Puzzle templates and generation rules
+    screens/          McKinney UI implementations
+components/           Shared UI used by multiple features
+lib/                  Cross-feature storage, crypto, geography, and utilities
+sky/                  Astronomy engine and catalog
+parked-routes/        Older routes retained for reference, not active navigation
+```
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+Route files should remain small. A route normally re-exports a screen from its feature:
 
-## Join the community
+```ts
+export { default } from "../features/mckinney/screens/McKinneyPackScreen";
+```
 
-Join our community of developers creating universal apps.
+## Feature boundaries
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+- A **location pack** contains sourced place data, coordinates, public-access rules, possible observations, and field-verification status.
+- A **puzzle engine** turns records from a location pack into mechanics such as I Spy, bingo, a maze, or virtual capture-the-signal.
+- A **screen** presents a feature but does not own canonical location facts.
+- `lib/` is reserved for capabilities genuinely shared across features. City-specific files do not belong there.
+- Backend API calls remain centralized until a later service-layer extraction can be done without destabilizing the deployed app.
+
+## Adding another city
+
+1. Create `features/<city>/data/locationPack.ts`.
+2. Add official sources and mark visual details as unverified until checked in person.
+3. Reuse general puzzle mechanics or add city-specific templates under `features/<city>/puzzles/`.
+4. Add screens under `features/<city>/screens/`.
+5. Add thin Expo route files under `app/` only for navigable pages.
+
+Never generate a location answer from an unsourced fact, and never mark a visual observation verified without an on-site check.
+
+## Verification
+
+```bash
+npm run lint
+npx tsc --noEmit
+npx expo export --platform android
+npx expo export --platform ios
+```

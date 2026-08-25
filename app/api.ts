@@ -14,6 +14,7 @@ export const API_BASE: string =
   "https://homage-backend.onrender.com";
 export const BUILD_LABEL: string =
   expoExtra?.BUILD_LABEL ?? legacyExtra?.BUILD_LABEL ?? "development";
+export const MESSAGE_HUNTS_ENABLED = true;
 
 const NGROK_SKIP_HEADER: Record<string, string> =
   API_BASE.includes("ngrok-free.app") || API_BASE.includes("ngrok.app")
@@ -218,6 +219,8 @@ export type GeneratedQuest = {
   song_url?: string;
   puzzle_kind?: PuzzleKind;
   puzzle_prompt?: string;
+  checkpoint_id?: string;
+  checkpoint_name?: string;
 };
 
 export type PuzzleKind = "riddle" | "word_puzzle" | "clue";
@@ -315,7 +318,9 @@ export type MultiplayerRole =
   | "pathfinder"
   | "archivist"
   | "hider"
-  | "seeker";
+  | "seeker"
+  | "sender"
+  | "solver" | "investigator" | "operative" | "explorer" | "saboteur" | "controller" | "viewer";
 
 export type MultiplayerPlayer = {
   id: string;
@@ -327,7 +332,7 @@ export type MultiplayerPlayer = {
 
 export type MultiplayerRoom = {
   code: string;
-  mode: "signal_hunt" | "hide_seek";
+  mode: "signal_hunt" | "hide_seek" | "message_hunt" | "signal_saboteur" | "simulation";
   safety_policy_version: number;
   status: "waiting" | "active" | "complete";
   created_at: string;
@@ -341,6 +346,7 @@ export type MultiplayerRoom = {
     melody_by: string | null;
     photo_by: string | null;
     sky_by: string[];
+    opened_by?: string | null;
   };
   hide_seek?: {
     selected_quest: GeneratedQuest | null;
@@ -363,6 +369,8 @@ export type MultiplayerRoom = {
     sky_by: string[];
     requires_safe_area_confirmation: boolean;
   };
+  saboteur?: { round: number; max_rounds: number; events: { round: number; corrupted_building_id: string; inspected_building_id: string; evidence: string }[]; your_role: MultiplayerRole | null; submitted: boolean; result: { accused: string; culprit: string; correct: boolean } | null };
+  simulation?: { module_id: string; step: number; revision: number };
 };
 
 export async function generateEnvironmentQuests(payload: {
@@ -662,12 +670,24 @@ export async function createMultiplayerRoom(payload: {
   platform: string;
   latitude: number;
   longitude: number;
-  mode: "signal_hunt" | "hide_seek";
+  mode: "signal_hunt" | "hide_seek" | "message_hunt" | "signal_saboteur" | "simulation";
+  document_id?: string;
 }): Promise<MultiplayerRoom> {
   return multiplayerRequest("/multiplayer/rooms", {
     method: "POST",
     body: JSON.stringify(payload),
   });
+}
+
+export async function updateSimulationRoom(code: string, payload: { player_id: string; module_id: string; step: number }): Promise<MultiplayerRoom> {
+  return multiplayerRequest(`/multiplayer/rooms/${encodeURIComponent(code)}/simulation`, { method: "POST", body: JSON.stringify(payload) });
+}
+
+export async function submitSaboteurTurn(code: string, payload: { player_id: string; building_id: string; action: "investigate" | "stabilize" | "sabotage" }): Promise<MultiplayerRoom> {
+  return multiplayerRequest(`/multiplayer/rooms/${encodeURIComponent(code)}/saboteur/turn`, { method: "POST", body: JSON.stringify(payload) });
+}
+export async function accuseSaboteur(code: string, payload: { player_id: string; suspect: "player2" | "ghost" }): Promise<MultiplayerRoom> {
+  return multiplayerRequest(`/multiplayer/rooms/${encodeURIComponent(code)}/saboteur/accuse`, { method: "POST", body: JSON.stringify(payload) });
 }
 
 export async function joinMultiplayerRoom(
@@ -704,7 +724,7 @@ export async function submitMultiplayerAction(
   payload: {
     player_id: string;
     quest_id: string;
-    action: "melody" | "photo" | "sky";
+    action: "melody" | "photo" | "sky" | "message_opened";
     safe_area_confirmed?: boolean;
   },
 ): Promise<MultiplayerRoom> {

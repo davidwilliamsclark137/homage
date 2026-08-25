@@ -12,6 +12,7 @@ module.exports = () => ({
   scheme: "homage",
   plugins: [
     "expo-router",
+    "expo-font",
     [
       "expo-camera",
       {
@@ -48,6 +49,7 @@ module.exports = () => ({
     eas: { projectId: "e8dd5376-de0c-45e6-bc68-ee6ddff3fc4d" },
   },
   ios: {
+    bundleIdentifier: "com.davidwilliamsclark.homage",
     infoPlist: {
       NSCameraUsageDescription:
         "Homage uses your camera to scan document transfer QR codes.",
@@ -56,6 +58,7 @@ module.exports = () => ({
     },
   },
   android: {
+    package: "com.davidwilliamsclark.homage",
     permissions: [
       "android.permission.CAMERA",
       "android.permission.ACCESS_COARSE_LOCATION",
