@@ -5,6 +5,12 @@ export type SimulationModule = { id: string; name: string; question: string; pla
 export const NINE_BUILDINGS = ["Harvest Block", "Magic Needle Block", "Antique Company Block", "Shorty’s Block", "MPAC Block", "Celt Block", "Cadillac Block", "Centro Block", "Filtered Block"];
 
 export const SIMULATION_MODULES: SimulationModule[] = [
+  { id: "living-signal", name: "Living Signal", question: "Can portal rules, physical movement and a changing graph become one understandable game?", players: "1–2 players + Ghost", steps: [
+    { title: "MPAC wakes", detail: "The center portal becomes the source. Its street-adjacent neighbors become possible moves.", cells: { 4:"player",1:"active",3:"active",5:"active",7:"active" } },
+    { title: "Tune a portal", detail: "A visual phase challenge stabilizes one adjacent node and reveals its graph rule.", cells: { 3:"solved",4:"solved" } },
+    { title: "Route the signal", detail: "The new node opens its neighbors. A corrupted phase spends a move and fractures that portal.", cells: { 3:"solved",4:"solved",6:"active" } },
+    { title: "Complete the graph", detail: "Form the target three-node path within six moves to decrypt its hidden payload.", cells: { 3:"solved",4:"solved",6:"solved" } },
+  ]},
   { id: "portal-network", name: "Portal Network", question: "Can nine location-locked fractal spaces make the downtown blocks feel distinct?", players: "1+ explorers", steps: [
     { title: "Nine dormant portals", detail: "Each downtown block owns one distinct fractal simulation. Field mode keeps it locked until a player reaches that block.", cells: {} },
     { title: "Approach a block", detail: "The nearest block becomes the only available portal, preventing remote entry during a live game.", cells: { 4: "player" } },

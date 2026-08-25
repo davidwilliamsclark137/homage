@@ -12,6 +12,7 @@ type LocalGame="hidden-maze"|"i-spy"|"bingo"|"tic-tac-toe";
 type Mark="X"|"O"|null;
 const C={bg:"#F8F5EC",card:"#FFF",ink:"#17241D",muted:"#627067",green:"#275D45",gold:"#E0A43A",line:"#DCD8CF",pale:"#E3ECE6",red:"#A33D32",blue:"#426A9B"};
 const GAMES=[
+ {id:"living-signal",title:"Living Signal",players:"1–2 players",description:"Tune portals, route energy through the street graph, and decrypt its payload."},
  {id:"saboteur",title:"Signal Saboteur",players:"2 phones",description:"Investigate, stabilize, sabotage, and accuse through a synchronized room."},
  {id:"square-three",title:"Square Three",players:"1–2 players",description:"Visit downtown clues and solve the compact location Sudoku."},
  {id:"hidden-maze",title:"Hidden Sidewalk Maze",players:"1–2 players",description:"Solve turns as a route unfolds around several downtown blocks."},
@@ -24,7 +25,7 @@ const GAMES=[
 export default function McKinneyPuzzleLabScreen(){
  const router=useRouter(); const [local,setLocal]=useState<LocalGame|null>(null),[boardNames,setBoardNames]=useState<string[]>(NINE_BUILDINGS);
  useFocusEffect(useCallback(()=>{void AsyncStorage.getItem(CUSTOM_BOARD_KEY).then(raw=>{if(!raw)return;try{const board=JSON.parse(raw) as CustomBoard;if(board.names?.length===9)setBoardNames(board.names)}catch{}})},[]));
- function open(id:string){if(id==="saboteur")router.push("/signal-saboteur-multiplayer");else if(id==="square-three")router.push("/mckinney-grid");else if(id==="encrypted-hunt")router.push("/message-hunt");else setLocal(id as LocalGame)}
+ function open(id:string){if(id==="living-signal")router.push("/living-signal");else if(id==="saboteur")router.push("/signal-saboteur-multiplayer");else if(id==="square-three")router.push("/mckinney-grid");else if(id==="encrypted-hunt")router.push("/message-hunt");else setLocal(id as LocalGame)}
  if(local)return <LocalGameScreen game={local} names={boardNames} close={()=>setLocal(null)}/>;
  return <SafeAreaView style={s.safe} edges={["bottom"]}><ScrollView contentContainerStyle={s.content}>
   <Text style={s.eye}>DOWNTOWN MCKINNEY · FIELD BUILD</Text><Text style={s.title}>Choose a game</Text><Text style={s.intro}>These are the playable versions. Every game uses the same nine numbered blocks; Simulation Lab remains the place to study how each mechanic works.</Text>

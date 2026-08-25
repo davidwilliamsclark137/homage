@@ -25,6 +25,7 @@ export default function RootLayout() {
       <Stack.Screen name="nine-portals" options={{ title: "Nine Portals" }} />
       <Stack.Screen name="portal/[id]" options={{ title: "Portal", headerTransparent: true, headerTintColor: "#F3F1E8" }} />
       <Stack.Screen name="experimental-portal" options={{ title: "Luminous Archive", headerTransparent: true, headerTintColor: "#F3F1E8" }} />
+      <Stack.Screen name="living-signal" options={{ title: "Living Signal" }} />
       <Stack.Screen name="two-phone-simulation" options={{ title: "Two-phone Simulation" }} />
       <Stack.Screen name="board-builder" options={{ title: "Create a nine-block board" }} />
       <Stack.Screen name="signal-saboteur-multiplayer" options={{ title: "Two-phone Saboteur" }} />
