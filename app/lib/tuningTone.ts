@@ -1,30 +1,54 @@
 import * as FileSystem from "expo-file-system/legacy";
 
 const SAMPLE_RATE = 22_050;
-const DURATION = 4;
+const DURATION = 12;
 const cache = new Map<string, string>();
+const inFlight = new Map<string, Promise<string>>();
 
-/** Creates one seamless oscillator. Its pitch is changed live by the native player. */
-export async function tuningVoice(node: number, voice: number) {
-  const key = `${node}-${voice}`;
+/** Builds a long, seamless mixed chord. The UI morphs by crossfading two layers. */
+export function tuningLayer(node: number, pure: boolean) {
+  const key = `${node}-${pure ? "pure-v2" : "drift-v2"}`;
   const existing = cache.get(key);
-  if (existing) return existing;
-  if (!FileSystem.cacheDirectory) throw new Error("Audio cache unavailable");
+  if (existing) return Promise.resolve(existing);
+  const pending = inFlight.get(key);
+  if (pending) return pending;
+  const task = buildLayer(node, pure, key).finally(() => inFlight.delete(key));
+  inFlight.set(key, task);
+  return task;
+}
 
+async function buildLayer(node: number, pure: boolean, key: string) {
+  if (!FileSystem.cacheDirectory) throw new Error("Audio cache unavailable");
+  const uri = `${FileSystem.cacheDirectory}homage-${key}.wav`;
+  const info = await FileSystem.getInfoAsync(uri);
+  if (info.exists) { cache.set(key, uri); return uri; }
+
+  const requestedRoot = 220 * Math.pow(2, (node % 9) / 24);
+  const rootCycles = Math.max(4, Math.round(requestedRoot * DURATION / 4) * 4);
+  const root = rootCycles / DURATION;
   const ratios = [1, 5 / 4, 3 / 2];
-  const requested = 220 * Math.pow(2, (node % 9) / 24) * ratios[voice];
-  // An integer cycle count makes the WAV loop without a click at its seam.
-  const frequency = Math.round(requested * DURATION) / DURATION;
+  const detunes = pure ? [0, 0, 0] : [92, -126, 71];
+  const harmonics = [0.17, 0.058, 0.032, 0.022, 0.016];
+  const frequencies = ratios.map((ratio, voice) => {
+    const requested = root * ratio * Math.pow(2, detunes[voice] / 1200);
+    return Math.round(requested * DURATION) / DURATION;
+  });
+  const oscillators = frequencies.flatMap(frequency => harmonics.map((amplitude, index) => {
+    const step = Math.PI * 2 * frequency * (index + 1) / SAMPLE_RATE;
+    return { amplitude, sin: 0, cos: 1, sinStep: Math.sin(step), cosStep: Math.cos(step) };
+  }));
   const count = SAMPLE_RATE * DURATION;
   const pcm = new Int16Array(count);
   for (let i = 0; i < count; i++) {
-    const time = i / SAMPLE_RATE;
-    const sample = Math.sin(Math.PI * 2 * frequency * time) * 0.72
-      + Math.sin(Math.PI * 2 * frequency * 2 * time) * 0.08;
+    let sample = 0;
+    for (const oscillator of oscillators) {
+      sample += oscillator.sin * oscillator.amplitude;
+      const nextSin = oscillator.sin * oscillator.cosStep + oscillator.cos * oscillator.sinStep;
+      oscillator.cos = oscillator.cos * oscillator.cosStep - oscillator.sin * oscillator.sinStep;
+      oscillator.sin = nextSin;
+    }
     pcm[i] = Math.round(Math.tanh(sample) * 32767);
   }
-
-  const uri = `${FileSystem.cacheDirectory}homage-voice-${key}.wav`;
   await FileSystem.writeAsStringAsync(uri, base64(wav(pcm)), { encoding: FileSystem.EncodingType.Base64 });
   cache.set(key, uri);
   return uri;
