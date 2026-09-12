@@ -34,7 +34,7 @@ backend/.env.*
 backend/qr_vision_data/
 backend/tmp/
 tmp/
-data/
+/data/
 __pycache__/
 
 # === Render temp + build ===
