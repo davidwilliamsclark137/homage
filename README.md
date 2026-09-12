@@ -17,7 +17,7 @@ Fast demo: mobile capture app (Expo) + hosted backend (FastAPI).
 ## Dev (local)
 ### Backend
 ```bash
-cd /Users/davidwilliamclark/projects/homage
+cd homage
 python -m venv .venv
 source .venv/bin/activate
 pip install -r backend/requirements.txt
@@ -26,7 +26,7 @@ python -m uvicorn backend.server:app --host 0.0.0.0 --port 8000 --reload
 
 ### Phone remote dev
 ```bash
-cd /Users/davidwilliamclark/projects/homage/app
+cd homage/app
 npm run dev:remote
 ```
 
@@ -34,6 +34,11 @@ npm run dev:remote
 Use the Render backend instead of the local ngrok backend:
 
 ```bash
-cd /Users/davidwilliamclark/projects/homage/app
+cd homage/app
 API_BASE=https://homage-backend.onrender.com npx expo start --tunnel -c
 ```
+
+## Move development to Linux
+
+Follow [docs/LINUX_HANDOFF.md](docs/LINUX_HANDOFF.md). The mobile app continues
+to use the hosted Render backend, so local API secrets are not required.
