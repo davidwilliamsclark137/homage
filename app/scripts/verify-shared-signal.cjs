@@ -1,0 +1,40 @@
+const assert = require('node:assert/strict');
+const { createRelay, TTL } = require('../features/mckinney/social/relay.cjs');
+let now = 0;
+const relay = createRelay(() => now);
+const join = (device, room = 'test:shared') => relay.act({ action: 'join', device: 'test-device-' + device, room });
+const pulse = token => relay.act({ action: 'pulse', token });
+const leave = token => relay.act({ action: 'leave', token });
+const a = join('a').body;
+assert.equal(a.phase, 'waiting');
+assert.equal(join('a').body.token, a.token, 'Duplicate join must not create a second person');
+const b = join('b').body;
+assert.equal(b.phase, 'resonating');
+assert.notEqual(a.fragment, b.fragment);
+assert.equal(pulse(a.token).body.phase, 'resonating');
+for (now = 1000; now <= 7000; now += 1000) {
+  assert.equal(pulse(a.token).body.phase, 'resonating'); pulse(b.token);
+}
+assert.equal(pulse(a.token).body.phase, 'revealed');
+leave(a.token);
+assert.equal(pulse(b.token).body.phase, 'revealed', 'Both receive the discovery even if first phone leaves after reveal');
+leave(b.token);
+const c = join('c').body, d = join('d').body;
+now += 2000; leave(d.token);
+assert.equal(pulse(c.token).body.phase, 'waiting');
+const e = join('e').body;
+for (let i = 0; i < 8; i++) { now += 1000; pulse(c.token); }
+assert.equal(pulse(e.token).status, 410);
+assert.equal(pulse(c.token).body.phase, 'waiting', 'Stale presence cannot cause a discovery');
+const f = join('f').body;
+assert.equal(f.phase, 'resonating');
+assert.equal(f.remainingMs, 8000, 'A new pairing starts fresh');
+const other = join('other', 'tupps-hidden').body;
+assert.equal(other.phase, 'waiting', 'Different portals never pair');
+assert.equal(join('bad', 'made-up-portal').status, 400);
+assert.equal(relay.act({ action: 'join', room: 'test:shared' }).status, 400);
+assert.equal(pulse('invalid-token').status, 410);
+now += TTL + 1;
+assert.equal(pulse(c.token).status, 410);
+assert.equal(join('c').body.phase, 'waiting');
+console.log('Shared signal passed: solo, complementary pair, synchronized reveal, leave, stale presence, rejoin, room isolation, duplicate device, invalid requests.');

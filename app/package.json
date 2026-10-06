@@ -19,7 +19,9 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "verify:sky": "node scripts/verify-sky-catalog.mjs",
-    "reset-project": "node ./scripts/reset-project.js"
+    "reset-project": "node ./scripts/reset-project.js",
+    "check": "node scripts/check-homage.cjs",
+    "check:live": "node scripts/check-homage.cjs --live"
   },
   "dependencies": {
     "@noble/ciphers": "^2.2.0",

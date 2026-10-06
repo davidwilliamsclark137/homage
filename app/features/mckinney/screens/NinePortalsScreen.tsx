@@ -34,6 +34,7 @@ export default function NinePortalsScreen() {
         <Text style={s.location}>{locationStatus}</Text>
       </View>
 
+      <Pressable onPress={() => router.push("/rooftop-portal")} style={s.enter}><Text style={s.enterText}>Try a top-deck portal · Chestnut Commons</Text></Pressable>
       <Text style={s.choose}>CHOOSE AN AREA</Text>
       <View style={s.grid}>
         {NINE_BUILDINGS.map((name, index) => <Pressable accessibilityRole="button" accessibilityLabel={`Select portal at ${name}`} key={name} onPress={() => setSelected(index)} style={[s.cell, selected === index && { borderColor: ACCENTS[index], backgroundColor: "#172229" }]}>

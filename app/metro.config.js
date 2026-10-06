@@ -15,4 +15,12 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
   return context.resolveRequest(context, moduleName, platform);
 };
 
+const { createMiddleware } = require("./features/mckinney/social/relay.cjs");
+const signalMiddleware = createMiddleware();
+const originalEnhance = config.server.enhanceMiddleware;
+config.server.enhanceMiddleware = (middleware, server) => {
+  const enhanced = originalEnhance ? originalEnhance(middleware, server) : middleware;
+  return (req, res, next) => signalMiddleware(req, res, () => enhanced(req, res, next));
+};
+
 module.exports = config;

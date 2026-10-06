@@ -22,6 +22,10 @@ export default function RootLayout() {
       <Stack.Screen name="mckinney-pack" options={{ title: "McKinney location pack" }} />
       <Stack.Screen name="mckinney-puzzle-lab" options={{ title: "Play Lab" }} />
       <Stack.Screen name="mckinney-simulation-lab" options={{ title: "Simulation Lab" }} />
+      <Stack.Screen name="sky-lab" options={{ title: "Sky scanning lab" }} />
+      <Stack.Screen name="night-encounter" options={{ title: "Two halves of the night" }} />
+      <Stack.Screen name="shared-signal" options={{ title: "Shared signal" }} />
+      <Stack.Screen name="rooftop-portal" options={{ title: "Portal map" }} />
       <Stack.Screen name="nine-portals" options={{ title: "Nine Portals" }} />
       <Stack.Screen name="portal/[id]" options={{ title: "Portal", headerTransparent: true, headerTintColor: "#F3F1E8" }} />
       <Stack.Screen name="experimental-portal" options={{ title: "Luminous Archive", headerTransparent: true, headerTintColor: "#F3F1E8" }} />
