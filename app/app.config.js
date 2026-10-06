@@ -1,68 +1,9 @@
-// app.config.js — Homage
-const API_BASE =
-  process.env.API_BASE || "https://homage-backend.onrender.com";
-const BUILD_LABEL =
-  process.env.HOMAGE_BUILD_LABEL || new Date().toISOString().slice(0, 19);
-
 module.exports = () => ({
-  name: "Homage",
-  slug: "homage",
-  owner: "davidwilliamsclark",
-  privacy: "public",
-  scheme: "homage",
-  plugins: [
-    "expo-router",
-    "expo-font",
-    [
-      "expo-camera",
-      {
-        cameraPermission: "Allow Homage to scan document transfer QR codes.",
-        recordAudioAndroid: false,
-      },
-    ],
-    [
-      "expo-sensors",
-      {
-        motionPermission: "Allow Homage to align constellations as you move your phone.",
-      },
-    ],
-    [
-      "expo-audio",
-      {
-        microphonePermission: false,
-        recordAudioAndroid: false,
-      },
-    ],
-  ],
-  version: "1.0.0",
-
-  // ✅ Key change: use SDK runtime so Expo Go can load your updates
-  // (You can also just delete the whole runtimeVersion block—SDK is default)
-  runtimeVersion: { policy: "sdkVersion" },
-
-  updates: {
-    url: "https://u.expo.dev/e8dd5376-de0c-45e6-bc68-ee6ddff3fc4d",
-  },
-  extra: {
-    API_BASE,
-    BUILD_LABEL,
-    eas: { projectId: "e8dd5376-de0c-45e6-bc68-ee6ddff3fc4d" },
-  },
-  ios: {
-    bundleIdentifier: "com.davidwilliamsclark.homage",
-    infoPlist: {
-      NSCameraUsageDescription:
-        "Homage uses your camera to scan document transfer QR codes.",
-      NSLocationWhenInUseUsageDescription:
-        "Homage uses your position to place and unlock encrypted documents.",
-    },
-  },
-  android: {
-    package: "com.davidwilliamsclark.homage",
-    permissions: [
-      "android.permission.CAMERA",
-      "android.permission.ACCESS_COARSE_LOCATION",
-      "android.permission.ACCESS_FINE_LOCATION",
-    ],
-  },
+  name: 'Homage', slug: 'homage', owner: 'davidwilliamsclark', scheme: 'homage', version: '1.0.0',
+  plugins: ['expo-router', 'expo-font', ['expo-location', { locationWhenInUsePermission: 'Homage uses your location to reveal and activate nearby walking portals.' }]],
+  runtimeVersion: { policy: 'sdkVersion' },
+  updates: { url: 'https://u.expo.dev/e8dd5376-de0c-45e6-bc68-ee6ddff3fc4d' },
+  extra: { BUILD_LABEL: 'downtown-walk-v1', eas: { projectId: 'e8dd5376-de0c-45e6-bc68-ee6ddff3fc4d' } },
+  ios: { bundleIdentifier: 'com.davidwilliamsclark.homage' },
+  android: { package: 'com.davidwilliamsclark.homage', permissions: ['android.permission.ACCESS_COARSE_LOCATION','android.permission.ACCESS_FINE_LOCATION'] },
 });

@@ -1,0 +1,29 @@
+[
+  {
+    "id": "mpac-meeting",
+    "place": "MPAC \u00b7 North side",
+    "latitude": 33.197786,
+    "longitude": -96.6154074,
+    "sourceId": "way/472387412",
+    "fieldVerified": false,
+    "placementBasis": "North wall of MPAC model footprint, offset 3 m outdoors; provisional gathering point, not a surveyed entrance"
+  },
+  {
+    "id": "goodies-hidden",
+    "place": "Goodies Texas",
+    "latitude": 33.1977375,
+    "longitude": -96.6149567,
+    "sourceId": "way/491452541",
+    "fieldVerified": false,
+    "placementBasis": "City address point projected to street-facing model wall, offset approximately 2 m toward sidewalk; not surveyed entrance"
+  },
+  {
+    "id": "landon-storefront",
+    "place": "Landon Winery",
+    "latitude": 33.1973982,
+    "longitude": -96.6158843,
+    "sourceId": "way/495949624",
+    "fieldVerified": false,
+    "placementBasis": "Model footprint fa\u00e7ade midpoint plus approximately 2 m toward the street; sidewalk estimate, not surveyed entrance"
+  }
+]

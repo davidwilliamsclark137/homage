@@ -1,60 +1,29 @@
-# Homage mobile app
+# Homage — downtown walk
 
-Homage is an Expo/React Native exploration game. The app discovers nearby public hubs, supports encrypted two-player message hunts, and builds location-aware puzzles from curated city packs.
+One small journey around downtown McKinney: start at MPAC, find a hidden portal near Goodies Texas, finish outside Landon Winery, and save a keepsake on the phone.
 
-## Run locally
+## Run
 
-```bash
-npm install
-npm run dev:render
-```
+Node 24, `npm ci`, `npm run start:tunnel`, then open the printed Expo Go link. Same Expo identity: `davidwilliamsclark/homage`, project `e8dd5376-de0c-45e6-bc68-ee6ddff3fc4d`. A GitHub checkpoint does not publish an EAS update.
 
-`dev:render` uses the deployed Render backend. Keep credentials in the platform credential store or Render environment settings; do not add secrets to this repository.
+`npm run check` verifies the pure journey engine and app. `npm run check:live` adds development-server availability. See TESTING.md for real-phone tests.
 
-## Project structure
+## Structure
 
-```text
-app/                  Expo Router entry points only
-features/
-  mckinney/
-    data/             Sourced location records
-    puzzles/          Puzzle templates and generation rules
-    screens/          McKinney UI implementations
-components/           Shared UI used by multiple features
-lib/                  Cross-feature storage, crypto, geography, and utilities
-sky/                  Astronomy engine and catalog
-parked-routes/        Older routes retained for reference, not active navigation
-```
+- `journey/engine.ts`: ordered activation, location quality/freshness, arrival settling, validated progress. No React or networking; future two-player coordination can use this boundary. A real multiplayer service must authoritatively validate its own progress; client GPS gates are not anti-cheat.
+- `journey/places.json`: three provisional ground-level positions with provenance.
+- `journey/downtown.json`: cropped 2D footprint/street snapshot from the existing McKinney model. The external engine is not modified or required at runtime.
+- `journey/Map.tsx`: bundled north-up schematic, visible current portal, hidden-nearby marker, and player position.
+- `journey/JourneyScreen.tsx`: foreground GPS, explicit activation, local save/recovery, completion, field notes.
 
-Route files should remain small. A route normally re-exports a screen from its feature:
+No accounts, remote game backend, star scanning, motion/camera permissions, rooftop checks, or alternate games are included. Previous AsyncStorage keys are untouched. New progress is under `homage:journey:downtown-three-v1`.
 
-```ts
-export { default } from "../features/mckinney/screens/McKinneyPackScreen";
-```
+## Checkpoint and next phase
 
-## Feature boundaries
+Full experiments are preserved locally at tag `checkpoint/pre-downtown-walk-2026-10-05` and on GitHub branch `codex/checkpoint-pre-downtown-walk-2026-10-05`. The snapshot trees match. The old two-phone flows can be recovered there. This branch is `codex/downtown-walk`.
 
-- A **location pack** contains sourced place data, coordinates, public-access rules, possible observations, and field-verification status.
-- A **puzzle engine** turns records from a location pack into mechanics such as I Spy, bingo, a maze, or virtual capture-the-signal.
-- A **screen** presents a feature but does not own canonical location facts.
-- `lib/` is reserved for capabilities genuinely shared across features. City-specific files do not belong there.
-- Backend API calls remain centralized until a later service-layer extraction can be done without destabilizing the deployed app.
+Two-phone play remains the next phase after the solo walk is field proven. Pairing, separate clues, and shared completion should build on the small journey engine, not restore the old menu.
 
-## Adding another city
+## Map attribution
 
-1. Create `features/<city>/data/locationPack.ts`.
-2. Add official sources and mark visual details as unverified until checked in person.
-3. Reuse general puzzle mechanics or add city-specific templates under `features/<city>/puzzles/`.
-4. Add screens under `features/<city>/screens/`.
-5. Add thin Expo route files under `app/` only for navigable pages.
-
-Never generate a location answer from an unsourced fact, and never mark a visual observation verified without an on-site check.
-
-## Verification
-
-```bash
-npm run lint
-npx tsc --noEmit
-npx expo export --platform android
-npx expo export --platform ios
-```
+Map geometry is derived from OpenStreetMap contributors via the McKinney engine; © OpenStreetMap contributors, ODbL. https://www.openstreetmap.org/copyright . Full source provenance is in `journey/downtown.json`; placements are estimates and need field verification.

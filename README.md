@@ -1,44 +1,15 @@
 # Homage
 
-Fast demo: mobile capture app (Expo) + hosted backend (FastAPI).
+The active mobile app is a small downtown McKinney walking journey. Start at MPAC, discover a hidden portal, and finish with a keepsake saved on the phone.
 
-## Backend (Render)
-- Code: `backend/`
-- Requirements: `backend/requirements.txt`
-- Entry: `backend.server:app`
-- Persistent uploads folder: `DATA_DIR` (Render: `/data`)
-- Blueprint: `render.yaml`
+See [app/README.md](app/README.md) for architecture and launch instructions and [app/TESTING.md](app/TESTING.md) for the first outdoor test.
 
-## Mobile App
-- Code: `app/`
-- Uses Expo Router
-- Config: `app/app.config.js` (API_BASE defaults to hosted backend)
-
-## Dev (local)
-### Backend
-```bash
-cd homage
-python -m venv .venv
-source .venv/bin/activate
-pip install -r backend/requirements.txt
-python -m uvicorn backend.server:app --host 0.0.0.0 --port 8000 --reload
+```sh
+cd app
+npm ci
+npm run start:tunnel
 ```
 
-### Phone remote dev
-```bash
-cd homage/app
-npm run dev:remote
-```
+Use Node 24. The Expo identity remains `davidwilliamsclark/homage`. The current prototype does not use a remote game backend. Existing `backend/`, deployment files, and older developer scripts are retained as legacy infrastructure; they are not needed to run this walking app and were not redeployed.
 
-### Stable two-phone testing
-Use the Render backend instead of the local ngrok backend:
-
-```bash
-cd homage/app
-API_BASE=https://homage-backend.onrender.com npx expo start --tunnel -c
-```
-
-## Move development to Linux
-
-Follow [docs/LINUX_HANDOFF.md](docs/LINUX_HANDOFF.md). The mobile app continues
-to use the hosted Render backend, so local API secrets are not required.
+Two-phone play remains planned. Prior sky, rooftop, and multiplayer experiments are preserved on GitHub in `codex/checkpoint-pre-downtown-walk-2026-10-05` and locally under the corresponding checkpoint tag. Current development is on `codex/downtown-walk`.
