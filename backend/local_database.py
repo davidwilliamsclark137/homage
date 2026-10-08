@@ -286,7 +286,7 @@ def create_pairing_code(
         raise ValueError("Account not found")
     now = datetime.now(timezone.utc)
     created_at = now.isoformat()
-    expires_at = (now.replace(microsecond=0).timestamp() + ttl_minutes * 60)
+    expires_at = now.replace(microsecond=0).timestamp() + ttl_minutes * 60
     expires_at_iso = datetime.fromtimestamp(expires_at, timezone.utc).isoformat()
     alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
     with _DB_LOCK, connect(data_dir) as connection:
@@ -382,7 +382,9 @@ def claim_pairing_code(
     }
 
 
-def ensure_player(data_dir: Path, player_id: str | None, player_name: str | None) -> None:
+def ensure_player(
+    data_dir: Path, player_id: str | None, player_name: str | None
+) -> None:
     if not player_id:
         return
     initialize_database(data_dir)

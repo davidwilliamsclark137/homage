@@ -15,7 +15,15 @@ from pathlib import Path
 from typing import Optional
 
 import requests
-from fastapi import FastAPI, File, Form, HTTPException, Path as ApiPath, Query, UploadFile
+from fastapi import (
+    FastAPI,
+    File,
+    Form,
+    HTTPException,
+    Path as ApiPath,
+    Query,
+    UploadFile,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel, Field
@@ -38,7 +46,9 @@ def inspect_data_dir_candidate(path: Path) -> dict[str, object]:
         t = path / ".write_test"
         t.write_text("ok", encoding="utf-8")
         t.unlink(missing_ok=True)
-        info.update({"exists": path.exists(), "is_dir": path.is_dir(), "writable": True})
+        info.update(
+            {"exists": path.exists(), "is_dir": path.is_dir(), "writable": True}
+        )
     except Exception as exc:
         info["error"] = f"{type(exc).__name__}: {exc}"
     return info
@@ -90,9 +100,7 @@ CUSTOM_QUEST_LOCK = threading.Lock()
 DOCUMENT_LOCK = threading.Lock()
 SONG_LOCK = threading.Lock()
 ROOM_ALPHABET = string.ascii_uppercase + string.digits
-ARTIFACT_TOKEN_SECRET = os.getenv("ARTIFACT_TOKEN_SECRET") or secrets.token_urlsafe(
-    32
-)
+ARTIFACT_TOKEN_SECRET = os.getenv("ARTIFACT_TOKEN_SECRET") or secrets.token_urlsafe(32)
 
 # Downtown McKinney OSM test bounds.
 # Overpass bbox format: south, west, north, east
@@ -203,7 +211,10 @@ class RoomCreateRequest(BaseModel):
     platform: str = Field(min_length=1, max_length=20)
     latitude: float = Field(ge=-90, le=90)
     longitude: float = Field(ge=-180, le=180)
-    mode: str = Field(default="signal_hunt", pattern="^(signal_hunt|hide_seek|message_hunt|signal_saboteur|simulation)$")
+    mode: str = Field(
+        default="signal_hunt",
+        pattern="^(signal_hunt|hide_seek|message_hunt|signal_saboteur|simulation)$",
+    )
     document_id: Optional[str] = Field(default=None, min_length=6, max_length=100)
 
 
@@ -219,18 +230,23 @@ class RoomActionRequest(BaseModel):
     action: str = Field(pattern="^(melody|photo|sky|message_opened)$")
     safe_area_confirmed: bool = False
 
+
 class SaboteurTurnRequest(BaseModel):
     player_id: str = Field(min_length=8, max_length=80)
     building_id: str = Field(min_length=2, max_length=40)
     action: str = Field(pattern="^(investigate|stabilize|sabotage)$")
 
+
 class SaboteurAccuseRequest(BaseModel):
     player_id: str = Field(min_length=8, max_length=80)
     suspect: str = Field(pattern="^(player2|ghost)$")
 
+
 class SimulationUpdateRequest(BaseModel):
     player_id: str = Field(min_length=8, max_length=80)
-    module_id: str = Field(pattern="^(saboteur|square-three|hidden-maze|i-spy|message-hunt|bingo|tic-tac-toe)$")
+    module_id: str = Field(
+        pattern="^(saboteur|square-three|hidden-maze|i-spy|message-hunt|bingo|tic-tac-toe)$"
+    )
     step: int = Field(ge=0, le=20)
 
 
@@ -513,8 +529,7 @@ def public_document(record: dict, include_access: bool = False) -> dict:
     public = {
         key: value
         for key, value in record.items()
-        if key
-        not in {"created_by", "source_path", "pdf_path", "answer_digest"}
+        if key not in {"created_by", "source_path", "pdf_path", "answer_digest"}
     }
     if include_access and record.get("answer_digest"):
         token = artifact_access_token("document", record["id"])
@@ -571,15 +586,16 @@ def validate_song_composition(composition: dict) -> dict:
         or not isinstance(drums, dict)
         or set(drums) != {"kick", "snare", "hat"}
     ):
-        raise HTTPException(status_code=422, detail="Song must contain eight valid bars")
+        raise HTTPException(
+            status_code=422, detail="Song must contain eight valid bars"
+        )
 
     for bar in melody:
         if (
             not isinstance(bar, list)
             or len(bar) != steps
             or any(
-                note is not None
-                and (type(note) is not int or not 0 <= note <= 7)
+                note is not None and (type(note) is not int or not 0 <= note <= 7)
                 for note in bar
             )
         ):
@@ -718,7 +734,9 @@ def read_room(code: str) -> dict:
     except HTTPException:
         raise
     except Exception as error:
-        raise HTTPException(status_code=500, detail="Room data is unavailable") from error
+        raise HTTPException(
+            status_code=500, detail="Room data is unavailable"
+        ) from error
 
 
 def write_room(room: dict) -> None:
@@ -745,9 +763,14 @@ def public_room(room: dict, player_id: Optional[str] = None) -> dict:
     if room.get("mode") == "signal_saboteur":
         player = room["players"].get(player_id)
         state = room["saboteur"]
-        response["players"] = [{**item, "role": item["role"] if item["id"] == player_id else "operative"} for item in room["players"].values()]
+        response["players"] = [
+            {**item, "role": item["role"] if item["id"] == player_id else "operative"}
+            for item in room["players"].values()
+        ]
         response["saboteur"] = {
-            "round": state["round"], "max_rounds": 3, "events": state["events"],
+            "round": state["round"],
+            "max_rounds": 3,
+            "events": state["events"],
             "your_role": player["role"] if player else None,
             "submitted": bool(player_id and state["pending"].get(player_id)),
             "result": state.get("result") if room["status"] == "complete" else None,
@@ -793,9 +816,7 @@ def public_room(room: dict, player_id: Optional[str] = None) -> dict:
 def fresh_progress(room: dict) -> dict:
     quest_index = room["quest_index"]
     quest_id = (
-        room["quests"][quest_index]["id"]
-        if quest_index < len(room["quests"])
-        else None
+        room["quests"][quest_index]["id"] if quest_index < len(room["quests"]) else None
     )
     progress = {
         "quest_id": quest_id,
@@ -821,9 +842,7 @@ def distance_meters(
     second = math.radians(latitude_b)
     value = (
         math.sin(latitude_delta / 2) ** 2
-        + math.cos(first)
-        * math.cos(second)
-        * math.sin(longitude_delta / 2) ** 2
+        + math.cos(first) * math.cos(second) * math.sin(longitude_delta / 2) ** 2
     )
     return 2 * radius * math.asin(math.sqrt(value))
 
@@ -842,7 +861,9 @@ def temperature_for_distance(distance: float, radius: float) -> str:
     return "cold"
 
 
-def point_inside_bounds(p: dict, south: float, west: float, north: float, east: float) -> bool:
+def point_inside_bounds(
+    p: dict, south: float, west: float, north: float, east: float
+) -> bool:
     return (
         p["lat"] >= south
         and p["lat"] <= north
@@ -996,9 +1017,9 @@ def register_local_device(payload: LocalDeviceRegisterRequest):
         device_id=clean_single_line(payload.device_id),
         device_name=clean_single_line(payload.device_name),
         platform=clean_single_line(payload.platform),
-        account_id=clean_single_line(payload.account_id)
-        if payload.account_id
-        else None,
+        account_id=(
+            clean_single_line(payload.account_id) if payload.account_id else None
+        ),
     )
     return {"status": "registered", "device": device}
 
@@ -1052,31 +1073,65 @@ def claim_pairing_code(code: str, payload: PairingCodeClaimRequest):
 @app.post("/multiplayer/rooms")
 def create_multiplayer_room(payload: RoomCreateRequest):
     if payload.mode in {"signal_saboteur", "simulation"}:
-        names = ["Grand Hotel", "Shorty's Block", "Masonic Block", "Cloyd Block", "MPAC Square", "Magic Needle Block", "Antique Block", "Celt Block", "City Hall Edge"]
-        quests = [{"id": f"building-{index+1}", "name": name, "description": "Downtown building cell", "latitude": 33.1975, "longitude": -96.6155, "radius": 60, "kind": "checkin", "order": index+1, "category": "building", "source": "mckinney-board", "distance_m": 0} for index, name in enumerate(names)]
+        names = [
+            "Grand Hotel",
+            "Shorty's Block",
+            "Masonic Block",
+            "Cloyd Block",
+            "MPAC Square",
+            "Magic Needle Block",
+            "Antique Block",
+            "Celt Block",
+            "City Hall Edge",
+        ]
+        quests = [
+            {
+                "id": f"building-{index+1}",
+                "name": name,
+                "description": "Downtown building cell",
+                "latitude": 33.1975,
+                "longitude": -96.6155,
+                "radius": 60,
+                "kind": "checkin",
+                "order": index + 1,
+                "category": "building",
+                "source": "mckinney-board",
+                "distance_m": 0,
+            }
+            for index, name in enumerate(names)
+        ]
     elif payload.mode == "message_hunt":
         document = next(
-            (item for item in local_database.list_encrypted_placed_documents(DATA_DIR) if item.get("id") == payload.document_id),
+            (
+                item
+                for item in local_database.list_encrypted_placed_documents(DATA_DIR)
+                if item.get("id") == payload.document_id
+            ),
             None,
         )
         if not document:
             raise HTTPException(status_code=404, detail="Encrypted message not found")
-        quests = [{
-            "id": document["id"],
-            "name": document.get("checkpointName") or "Encrypted message",
-            "description": document.get("hint") or "An encrypted message is waiting.",
-            "latitude": document.get("checkpointLatitude", document["latitude"]),
-            "longitude": document.get("checkpointLongitude", document["longitude"]),
-            "radius": document.get("checkpointRadiusMeters", document["radiusMeters"]),
-            "kind": "checkin",
-            "order": 1,
-            "category": "encrypted_message",
-            "source": "community",
-            "distance_m": 0,
-            "document_id": document["id"],
-            "checkpoint_id": document.get("checkpointId"),
-            "checkpoint_name": document.get("checkpointName"),
-        }]
+        quests = [
+            {
+                "id": document["id"],
+                "name": document.get("checkpointName") or "Encrypted message",
+                "description": document.get("hint")
+                or "An encrypted message is waiting.",
+                "latitude": document.get("checkpointLatitude", document["latitude"]),
+                "longitude": document.get("checkpointLongitude", document["longitude"]),
+                "radius": document.get(
+                    "checkpointRadiusMeters", document["radiusMeters"]
+                ),
+                "kind": "checkin",
+                "order": 1,
+                "category": "encrypted_message",
+                "source": "community",
+                "distance_m": 0,
+                "document_id": document["id"],
+                "checkpoint_id": document.get("checkpointId"),
+                "checkpoint_name": document.get("checkpointName"),
+            }
+        ]
     else:
         quest_response = generate_quest_feed(
             latitude=payload.latitude,
@@ -1114,7 +1169,23 @@ def create_multiplayer_room(payload: RoomCreateRequest):
                     "id": payload.player_id,
                     "name": payload.player_name.strip(),
                     "platform": payload.platform,
-                    "role": ("controller" if payload.mode == "simulation" else "investigator" if payload.mode == "signal_saboteur" else "hider" if payload.mode == "hide_seek" else "sender" if payload.mode == "message_hunt" else "pathfinder"),
+                    "role": (
+                        "controller"
+                        if payload.mode == "simulation"
+                        else (
+                            "investigator"
+                            if payload.mode == "signal_saboteur"
+                            else (
+                                "hider"
+                                if payload.mode == "hide_seek"
+                                else (
+                                    "sender"
+                                    if payload.mode == "message_hunt"
+                                    else "pathfinder"
+                                )
+                            )
+                        )
+                    ),
                     "joined_at": now,
                 }
             },
@@ -1135,7 +1206,13 @@ def create_multiplayer_room(payload: RoomCreateRequest):
                 "sky_by": [],
             }
         if payload.mode == "signal_saboteur":
-            room["saboteur"] = {"round": 1, "culprit": None, "pending": {}, "events": [], "result": None}
+            room["saboteur"] = {
+                "round": 1,
+                "culprit": None,
+                "pending": {},
+                "events": [],
+                "result": None,
+            }
         if payload.mode == "simulation":
             room["simulation"] = {"module_id": "saboteur", "step": 0, "revision": 0}
         write_room(room)
@@ -1158,7 +1235,23 @@ def join_multiplayer_room(code: str, payload: RoomJoinRequest):
                 "id": payload.player_id,
                 "name": payload.player_name.strip(),
                 "platform": payload.platform,
-                "role": ("viewer" if room.get("mode") == "simulation" else "explorer" if room.get("mode") == "signal_saboteur" else "seeker" if room.get("mode") == "hide_seek" else "solver" if room.get("mode") == "message_hunt" else "archivist"),
+                "role": (
+                    "viewer"
+                    if room.get("mode") == "simulation"
+                    else (
+                        "explorer"
+                        if room.get("mode") == "signal_saboteur"
+                        else (
+                            "seeker"
+                            if room.get("mode") == "hide_seek"
+                            else (
+                                "solver"
+                                if room.get("mode") == "message_hunt"
+                                else "archivist"
+                            )
+                        )
+                    )
+                ),
                 "joined_at": now,
             }
 
@@ -1167,7 +1260,9 @@ def join_multiplayer_room(code: str, payload: RoomJoinRequest):
             if room.get("mode") == "signal_saboteur":
                 culprit = secrets.choice(["player2", "ghost"])
                 room["saboteur"]["culprit"] = culprit
-                room["players"][payload.player_id]["role"] = "saboteur" if culprit == "player2" else "explorer"
+                room["players"][payload.player_id]["role"] = (
+                    "saboteur" if culprit == "player2" else "explorer"
+                )
         room["updated_at"] = utc_now()
         write_room(room)
         return public_room(room, payload.player_id)
@@ -1178,17 +1273,30 @@ def get_multiplayer_room(code: str, player_id: Optional[str] = None):
     with ROOM_LOCK:
         return public_room(read_room(code), player_id)
 
+
 @app.post("/multiplayer/rooms/{code}/simulation")
 def update_simulation_room(code: str, payload: SimulationUpdateRequest):
     with ROOM_LOCK:
         room = read_room(code)
         player = room["players"].get(payload.player_id)
-        if room.get("mode") != "simulation" or not player or player.get("role") != "controller":
-            raise HTTPException(status_code=403, detail="Only the simulation controller can change the shared state")
-        room["simulation"] = {"module_id": payload.module_id, "step": payload.step, "revision": room["simulation"].get("revision", 0) + 1}
+        if (
+            room.get("mode") != "simulation"
+            or not player
+            or player.get("role") != "controller"
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail="Only the simulation controller can change the shared state",
+            )
+        room["simulation"] = {
+            "module_id": payload.module_id,
+            "step": payload.step,
+            "revision": room["simulation"].get("revision", 0) + 1,
+        }
         room["updated_at"] = utc_now()
         write_room(room)
         return public_room(room, payload.player_id)
+
 
 @app.post("/multiplayer/rooms/{code}/saboteur/turn")
 def submit_saboteur_turn(code: str, payload: SaboteurTurnRequest):
@@ -1205,39 +1313,87 @@ def submit_saboteur_turn(code: str, payload: SaboteurTurnRequest):
             raise HTTPException(status_code=403, detail="Investigator must inspect")
         if player["role"] == "explorer" and payload.action != "stabilize":
             raise HTTPException(status_code=403, detail="Explorer must stabilize")
-        if player["role"] == "saboteur" and payload.action not in {"stabilize", "sabotage"}:
+        if player["role"] == "saboteur" and payload.action not in {
+            "stabilize",
+            "sabotage",
+        }:
             raise HTTPException(status_code=403, detail="Invalid saboteur action")
         state = room["saboteur"]
-        state["pending"][payload.player_id] = {"building_id": payload.building_id, "action": payload.action}
+        state["pending"][payload.player_id] = {
+            "building_id": payload.building_id,
+            "action": payload.action,
+        }
         if len(state["pending"]) == 2:
-            investigator = next(v for pid, v in state["pending"].items() if room["players"][pid]["role"] == "investigator")
-            operative = next(v for pid, v in state["pending"].items() if room["players"][pid]["role"] != "investigator")
+            investigator = next(
+                v
+                for pid, v in state["pending"].items()
+                if room["players"][pid]["role"] == "investigator"
+            )
+            operative = next(
+                v
+                for pid, v in state["pending"].items()
+                if room["players"][pid]["role"] != "investigator"
+            )
             ghost_building = room["quests"][(state["round"] * 3 + 1) % 9]["id"]
-            corrupted = operative["building_id"] if state["culprit"] == "player2" else ghost_building
+            corrupted = (
+                operative["building_id"]
+                if state["culprit"] == "player2"
+                else ghost_building
+            )
             inspected = investigator["building_id"]
             if inspected == operative["building_id"]:
-                evidence = "Player 2 task verified clean." if state["culprit"] == "ghost" else "Player 2 record has a missing verification step."
+                evidence = (
+                    "Player 2 task verified clean."
+                    if state["culprit"] == "ghost"
+                    else "Player 2 record has a missing verification step."
+                )
             elif inspected == corrupted:
-                evidence = "No human check-in is attached to this corruption." if state["culprit"] == "ghost" else "A fresh Player 2 trace is attached to this corruption."
+                evidence = (
+                    "No human check-in is attached to this corruption."
+                    if state["culprit"] == "ghost"
+                    else "A fresh Player 2 trace is attached to this corruption."
+                )
             else:
                 evidence = "No decisive trace was found here."
-            state["events"].append({"round": state["round"], "corrupted_building_id": corrupted, "inspected_building_id": inspected, "evidence": evidence})
+            state["events"].append(
+                {
+                    "round": state["round"],
+                    "corrupted_building_id": corrupted,
+                    "inspected_building_id": inspected,
+                    "evidence": evidence,
+                }
+            )
             state["round"] += 1
             state["pending"] = {}
-        room["updated_at"] = utc_now(); write_room(room)
+        room["updated_at"] = utc_now()
+        write_room(room)
         return public_room(room, payload.player_id)
+
 
 @app.post("/multiplayer/rooms/{code}/saboteur/accuse")
 def accuse_saboteur(code: str, payload: SaboteurAccuseRequest):
     with ROOM_LOCK:
-        room = read_room(code); player = room["players"].get(payload.player_id)
-        if room.get("mode") != "signal_saboteur" or not player or player["role"] != "investigator":
-            raise HTTPException(status_code=403, detail="Only the investigator can accuse")
+        room = read_room(code)
+        player = room["players"].get(payload.player_id)
+        if (
+            room.get("mode") != "signal_saboteur"
+            or not player
+            or player["role"] != "investigator"
+        ):
+            raise HTTPException(
+                status_code=403, detail="Only the investigator can accuse"
+            )
         if room["saboteur"]["round"] <= 3:
             raise HTTPException(status_code=409, detail="Complete three rounds first")
         correct = payload.suspect == room["saboteur"]["culprit"]
-        room["saboteur"]["result"] = {"accused": payload.suspect, "culprit": room["saboteur"]["culprit"], "correct": correct}
-        room["status"] = "complete"; room["updated_at"] = utc_now(); write_room(room)
+        room["saboteur"]["result"] = {
+            "accused": payload.suspect,
+            "culprit": room["saboteur"]["culprit"],
+            "correct": correct,
+        }
+        room["status"] = "complete"
+        room["updated_at"] = utc_now()
+        write_room(room)
         return public_room(room, payload.player_id)
 
 
@@ -1248,13 +1404,22 @@ def submit_multiplayer_action(code: str, payload: RoomActionRequest):
         if room.get("mode") == "message_hunt":
             player = room["players"].get(payload.player_id)
             if not player:
-                raise HTTPException(status_code=403, detail="Player is not in this room")
+                raise HTTPException(
+                    status_code=403, detail="Player is not in this room"
+                )
             if room["status"] == "waiting":
                 raise HTTPException(status_code=409, detail="Waiting for Player 2")
-            if payload.action != "message_opened" or payload.quest_id != room["progress"]["quest_id"]:
-                raise HTTPException(status_code=409, detail="This is not the active message")
+            if (
+                payload.action != "message_opened"
+                or payload.quest_id != room["progress"]["quest_id"]
+            ):
+                raise HTTPException(
+                    status_code=409, detail="This is not the active message"
+                )
             if player["role"] != "solver":
-                raise HTTPException(status_code=403, detail="Only Player 2 can open the message")
+                raise HTTPException(
+                    status_code=403, detail="Only Player 2 can open the message"
+                )
             room["progress"]["opened_by"] = payload.player_id
             room["completed_ids"] = [payload.quest_id]
             room["quest_index"] = 1
@@ -2034,7 +2199,9 @@ def unlock_artifact(payload: ArtifactUnlockRequest):
     try:
         record = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
-        raise HTTPException(status_code=500, detail="Artifact could not be read") from error
+        raise HTTPException(
+            status_code=500, detail="Artifact could not be read"
+        ) from error
 
     submitted = puzzle_answer_digest(payload.answer)
     expected = record.get("answer_digest")

@@ -194,9 +194,7 @@ def road_geometry(element: dict[str, Any]) -> list[tuple[float, float]]:
             continue
         latitude = point.get("lat")
         longitude = point.get("lon")
-        if isinstance(latitude, (int, float)) and isinstance(
-            longitude, (int, float)
-        ):
+        if isinstance(latitude, (int, float)) and isinstance(longitude, (int, float)):
             points.append((float(latitude), float(longitude)))
     return points
 
@@ -542,8 +540,7 @@ def generate_environment_quests(
 
     selected = select_diverse_features(features, limit)
     quests = [
-        feature_to_quest(feature, index + 1)
-        for index, feature in enumerate(selected)
+        feature_to_quest(feature, index + 1) for index, feature in enumerate(selected)
     ]
     uses_stationary_fallback = not quests
     if uses_stationary_fallback:

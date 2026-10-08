@@ -203,7 +203,11 @@ class MultiplayerTests(unittest.TestCase):
             "checkpointRadiusMeters": 120,
             "hint": "Find the green door",
         }
-        with patch.object(server.local_database, "list_encrypted_placed_documents", return_value=[document]):
+        with patch.object(
+            server.local_database,
+            "list_encrypted_placed_documents",
+            return_value=[document],
+        ):
             room = server.create_multiplayer_room(
                 server.RoomCreateRequest(
                     player_id="player-one",
@@ -218,13 +222,17 @@ class MultiplayerTests(unittest.TestCase):
         self.assertEqual(room["players"][0]["role"], "sender")
         room = server.join_multiplayer_room(
             room["code"],
-            server.RoomJoinRequest(player_id="player-two", player_name="Player 2", platform="android"),
+            server.RoomJoinRequest(
+                player_id="player-two", player_name="Player 2", platform="android"
+            ),
         )
         self.assertEqual(room["status"], "active")
         self.assertEqual(room["players"][1]["role"], "solver")
         room = server.submit_multiplayer_action(
             room["code"],
-            server.RoomActionRequest(player_id="player-two", quest_id=document["id"], action="message_opened"),
+            server.RoomActionRequest(
+                player_id="player-two", quest_id=document["id"], action="message_opened"
+            ),
         )
         self.assertEqual(room["status"], "complete")
         self.assertEqual(room["progress"]["opened_by"], "player-two")
@@ -282,15 +290,9 @@ class MultiplayerTests(unittest.TestCase):
             "chordDegrees": [0, 3, 4, 0, 5, 3, 4, 0],
             "melody": [[0, None, 2, None, 4, None, 2, None] for _ in range(8)],
             "drums": {
-                "kick": [
-                    [step in {0, 4} for step in range(steps)] for _ in range(8)
-                ],
-                "snare": [
-                    [step in {2, 6} for step in range(steps)] for _ in range(8)
-                ],
-                "hat": [
-                    [step % 2 == 0 for step in range(steps)] for _ in range(8)
-                ],
+                "kick": [[step in {0, 4} for step in range(steps)] for _ in range(8)],
+                "snare": [[step in {2, 6} for step in range(steps)] for _ in range(8)],
+                "hat": [[step % 2 == 0 for step in range(steps)] for _ in range(8)],
             },
         }
         created = server.create_song(
