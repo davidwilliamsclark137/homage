@@ -1,38 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
-import { useLocalSearchParams } from "expo-router";
-import { WebView } from "react-native-webview";
-import * as Location from "expo-location";
-import { NINE_BUILDINGS } from "../simulations/catalog";
-import { DOWNTOWN_PORTALS, PORTAL_RADIUS_METERS } from "../portals/locations";
-import { haversine } from "../../../lib/geo";
-
-const FRACTALS = [
-  ["Mandelbrot Drift", "Pinch or tap to travel deeper into the set."],
-  ["Julia Orbit", "A living Julia set whose equation slowly changes."],
-  ["Sierpiński Signal", "Thousands of choices assemble one triangular signal."],
-  ["Barnsley Growth", "Four simple transformations grow an impossible fern."],
-  ["Recursive Canopy", "A branching system breathes and bends in the dark."],
-  ["Koch Resonance", "Every edge divides and unfolds into a snowflake."],
-  ["Dragon Path", "A single folded line becomes a space-filling dragon."],
-  ["Newton Basins", "Color reveals which root each point is drawn toward."],
-  ["Life Bloom", "Cellular automata evolve into shifting fractal islands."],
-] as const;
-
-export default function PortalFractalScreen(){
-  const params=useLocalSearchParams<{id?:string;simulation?:string}>();
-  const id=Math.max(0,Math.min(8,Number.parseInt(params.id??"0",10)||0));
-  const simulation=params.simulation==="1";
-  const [access,setAccess]=useState<"checking"|"open"|"locked">(simulation?"open":"checking");
-  const [distance,setDistance]=useState<number|null>(null);
-  useEffect(()=>{if(simulation)return;void (async()=>{const permission=await Location.requestForegroundPermissionsAsync();if(!permission.granted){setAccess("locked");return}const position=await Location.getCurrentPositionAsync({accuracy:Location.Accuracy.Balanced});const meters=haversine(position.coords,DOWNTOWN_PORTALS[id]);setDistance(meters);setAccess(meters<=PORTAL_RADIUS_METERS?"open":"locked")})().catch(()=>setAccess("locked"))},[id,simulation]);
-  const html=useMemo(()=>portalHtml(id,NINE_BUILDINGS[id],FRACTALS[id][0],FRACTALS[id][1]),[id]);
-  if(access!=="open")return <View style={s.lock}><Text style={s.lockEye}>PORTAL {id+1} · FIELD LOCK</Text><Text style={s.lockTitle}>{access==="checking"?"Finding your signal…":"Portal out of range"}</Text><Text style={s.lockText}>{access==="checking"?"Checking your distance from the assigned downtown block.":distance===null?"Allow location access, then return and try again.":`Travel about ${Math.round(distance)} m to ${NINE_BUILDINGS[id]}, or preview this portal through Simulation Lab.`}</Text></View>;
-  return <View style={s.page}><WebView source={{html}} originWhitelist={["*"]} javaScriptEnabled scrollEnabled={false} overScrollMode="never" style={s.web}/></View>;
-}
-
-export function portalHtml(id:number,block:string,title:string,description:string){return `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><style>
-*{box-sizing:border-box}html,body{height:100%;margin:0;overflow:hidden;background:#05080c;color:#f4f1e8;font-family:-apple-system,BlinkMacSystemFont,system-ui,sans-serif}canvas{display:block;height:100%;width:100%;touch-action:none}.veil{background:linear-gradient(#05080caa,transparent);left:0;padding:18px 18px 40px;pointer-events:none;position:fixed;right:0;top:0}.num{color:#72e9ad;font-size:10px;font-weight:900;letter-spacing:1.6px}.title{font-size:27px;font-weight:900;margin-top:5px}.block{color:#b7c5bd;font-size:12px;font-weight:800;margin-top:3px}.desc{color:#84948c;font-size:11px;line-height:16px;margin-top:7px;max-width:340px}.hint{background:#101820cc;border:1px solid #26343b;border-radius:20px;bottom:18px;color:#a9b7b0;font-size:10px;font-weight:800;left:50%;padding:9px 14px;position:fixed;transform:translateX(-50%);white-space:nowrap}</style></head><body><canvas id="c"></canvas><div class="veil"><div class="num">PORTAL ${id+1} · LIVE FRACTAL</div><div class="title">${title}</div><div class="block">${block}</div><div class="desc">${description}</div></div><div class="hint">TAP: NEW VARIATION · DRAG: RESHAPE</div><script>
+export function portalHtml(
+  id: number,
+  block: string,
+  title: string,
+  description: string,
+) {
+  return `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><style>
+*{box-sizing:border-box}html,body{height:100%;margin:0;overflow:hidden;background:#05080c;color:#f4f1e8;font-family:-apple-system,BlinkMacSystemFont,system-ui,sans-serif}canvas{display:block;height:100%;width:100%;touch-action:none}.veil{background:linear-gradient(#05080caa,transparent);left:0;padding:18px 18px 40px;pointer-events:none;position:fixed;right:0;top:0}.num{color:#72e9ad;font-size:10px;font-weight:900;letter-spacing:1.6px}.title{font-size:27px;font-weight:900;margin-top:5px}.block{color:#b7c5bd;font-size:12px;font-weight:800;margin-top:3px}.desc{color:#84948c;font-size:11px;line-height:16px;margin-top:7px;max-width:340px}.hint{background:#101820cc;border:1px solid #26343b;border-radius:20px;bottom:18px;color:#a9b7b0;font-size:10px;font-weight:800;left:50%;padding:9px 14px;position:fixed;transform:translateX(-50%);white-space:nowrap}</style></head><body><canvas id="c"></canvas><div class="veil"><div class="num">PORTAL ${id + 1} · LIVE FRACTAL</div><div class="title">${title}</div><div class="block">${block}</div><div class="desc">${description}</div></div><div class="hint">TAP: NEW VARIATION · DRAG: RESHAPE</div><script>
 const ID=${id},c=document.getElementById('c'),x=c.getContext('2d',{alpha:false});let W,H,D=1,t=0,seed=Math.random()*9,variant=0,life=null,pointer={x:.5,y:.5,down:false,sx:0,sy:0,moved:false};function size(){W=c.width=innerWidth*D;H=c.height=innerHeight*D}addEventListener('resize',size);size();function rnd(){seed=Math.sin(seed*91.91+1.7)*43758.5453;return seed-Math.floor(seed)}function point(e){const r=c.getBoundingClientRect();return{x:(e.clientX-r.left)/r.width,y:(e.clientY-r.top)/r.height}}c.onpointerdown=e=>{const p=point(e);pointer.down=true;pointer.sx=pointer.x=p.x;pointer.sy=pointer.y=p.y;pointer.moved=false;c.setPointerCapture(e.pointerId)};c.onpointermove=e=>{if(!pointer.down)return;const p=point(e);pointer.x=p.x;pointer.y=p.y;if(Math.hypot(pointer.x-pointer.sx,pointer.y-pointer.sy)>.025)pointer.moved=true;if(ID===8&&life)paintLife(pointer.x,pointer.y)};c.onpointerup=e=>{if(!pointer.moved){variant++;seed=Math.random()*100+variant;life=null;pointer.x=.18+rnd()*.64;pointer.y=.2+rnd()*.62}pointer.down=false;try{c.releasePointerCapture(e.pointerId)}catch{}};c.onpointercancel=()=>pointer.down=false;
 const pal=(v,a=1)=>{const h=(150+ID*27+v*125+t*3)%360;return 'hsla('+h+',80%,'+(45+v*25)+'%,'+a+')'};
 function mandel(julia=false){let im=x.createImageData(W,H),d=im.data,zoom=1.6+pointer.y*2+Math.sin(t*.12)*.2,cx=julia?0:-.72+(pointer.x-.5)*.7,cy=julia?0:(pointer.y-.5)*.45;for(let py=0;py<H;py+=2)for(let px=0;px<W;px+=2){let a=(px/W-.5)*zoom*W/H+cx,b=(py/H-.5)*zoom+cy,za=julia?a:0,zb=julia?b:0,ca=julia?-.82+pointer.x*.3+Math.sin(variant)*.05:a,cb=julia?-.12+pointer.y*.55+Math.cos(variant)*.05:b,n=0;for(;n<42&&za*za+zb*zb<4;n++){let q=za*za-zb*zb+ca;zb=2*za*zb+cb;za=q}let v=n/42,h=(150+ID*32+n*7+t*4+variant*31)%360,col=hsl(h,78,n===42?4:28+v*48);for(let oy=0;oy<2;oy++)for(let ox=0;ox<2;ox++){let k=((py+oy)*W+px+ox)*4;d[k]=col[0];d[k+1]=col[1];d[k+2]=col[2];d[k+3]=255}}x.putImageData(im,0,0)}
@@ -45,6 +18,5 @@ function dragon(){fade(.25);let n=10+(variant%3),turns=[1];for(let k=1;k<n;k++)t
 function newton(){let im=x.createImageData(W,H),d=im.data,zoom=2+pointer.y*2,ox=(pointer.x-.5)*1.5,oy=(pointer.y-.5)*1.2;for(let py=0;py<H;py+=3)for(let px=0;px<W;px+=3){let a=(px/W-.5)*zoom+ox,b=(py/H-.5)*zoom+oy,n=0;for(;n<18;n++){let a2=a*a,b2=b*b,den=3*(a2+b2)*(a2+b2);if(!den)break;let ra=(2*a)/3+(a2-b2)/(3*(a2+b2)*(a2+b2)),rb=(2*b)/3-2*a*b/(3*(a2+b2)*(a2+b2));a=ra;b=rb}let root=a>.4?0:b>0?1:2,col=hsl(145+root*110+t*2+variant*47,75,30+n*2);for(let yy=0;yy<3;yy++)for(let xx=0;xx<3;xx++){let k=((py+yy)*W+px+xx)*4;d[k]=col[0];d[k+1]=col[1];d[k+2]=col[2];d[k+3]=255}}x.putImageData(im,0,0)}
 let LW=76,LH=110;function paintLife(nx,ny){if(!life)return;let cx=(nx*LW)|0,cy=(ny*LH)|0;for(let y=-2;y<=2;y++)for(let q=-2;q<=2;q++)life[((cy+y+LH)%LH)*LW+(cx+q+LW)%LW]=rnd()>.3?1:0}function lifeBloom(){if(!life){life=Array.from({length:LW*LH},()=>rnd()>(.68+(variant%3)*.06)?1:0);paintLife(pointer.x,pointer.y)}let z=new Array(LW*LH).fill(0);for(let j=0;j<LH;j++)for(let i=0;i<LW;i++){let n=0;for(let y=-1;y<=1;y++)for(let q=-1;q<=1;q++)if(q||y)n+=life[((j+y+LH)%LH)*LW+(i+q+LW)%LW];let k=j*LW+i;z[k]=n===3||(life[k]&&n===2)?1:0}life=z;if(pointer.down)paintLife(pointer.x,pointer.y);x.fillStyle='#05080c';x.fillRect(0,0,W,H);let sw=W/LW,sh=H/LH;for(let j=0;j<LH;j++)for(let i=0;i<LW;i++)if(life[j*LW+i]){x.fillStyle=pal(((i+j)/(LW+LH)+variant*.1)%1,.82);x.fillRect(i*sw,j*sh,sw+.5,sh+.5)}}
 function fade(a){x.fillStyle='rgba(5,8,12,'+a+')';x.fillRect(0,0,W,H)}function frame(ms){t=ms/1000;if(ID===0)mandel(false);else if(ID===1)mandel(true);else if(ID===2)sier();else if(ID===3)fern();else if(ID===4)tree();else if(ID===5)koch();else if(ID===6)dragon();else if(ID===7)newton();else lifeBloom();requestAnimationFrame(frame)}requestAnimationFrame(frame);
-</script></body></html>`}
-
-const s=StyleSheet.create({page:{backgroundColor:"#05080C",flex:1},web:{backgroundColor:"#05080C",flex:1},lock:{backgroundColor:"#090D12",flex:1,justifyContent:"center",padding:30},lockEye:{color:"#69E4A6",fontSize:10,fontWeight:"900",letterSpacing:1.4},lockTitle:{color:"#F3F1E8",fontSize:31,fontWeight:"900",marginTop:8},lockText:{color:"#93A29A",fontSize:13,lineHeight:20,marginTop:10}});
+</script></body></html>`;
+}

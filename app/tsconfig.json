@@ -1,22 +1,7 @@
 {
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
-    "strict": true,
-    "paths": {
-      "@/*": [
-        "./*"
-      ]
-    }
+    "strict": true
   },
-  "include": [
-    "**/*.ts",
-    "**/*.tsx"
-  ],
-  "exclude": [
-    "parked-routes/**",
-    "screens/**",
-    "state/**",
-    "hooks/useProgress.ts",
-    "hooks/useQuestSync.ts"
-  ]
+  "include": ["**/*.ts", "**/*.tsx"]
 }

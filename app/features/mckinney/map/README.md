@@ -1,7 +1,6 @@
 # Homage portal map
 
-A self-contained Three.js map embedded in the rooftop-portal screen, linked as
-**Explore portal map** from the home page.
+A self-contained Three.js map opened directly as the home screen of Homage Portals.
 
 scene.json is a bounded snapshot of the McKinney engine's 1,140 building
 polygons, 377 roads, and a 33 × 33 crop of its retained terrain grid.
