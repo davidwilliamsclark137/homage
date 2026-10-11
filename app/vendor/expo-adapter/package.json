@@ -1,0 +1,14 @@
+{
+  "name": "@mckinney/star-expo",
+  "version": "0.2.0",
+  "private": true,
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "peerDependencies": {
+    "@mckinney/star-engine": "0.2.0",
+    "expo-location": "~19.0.8",
+    "expo-sensors": "~15.0.7",
+    "react": "19.1.0",
+    "react-native": "0.81.5"
+  }
+}

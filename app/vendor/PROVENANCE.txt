@@ -1,0 +1,1 @@
+Snapshot of McKinney Star Engine 0.2.0 from /home/phoenix_wurx/Documents/ChatGPT/mckinney_star_engine. Imported 2026-10-11. Engine and adapter kept separate from Homage UI. Physical acquisition remains unverified. See upstream docs/AUDIT.md.

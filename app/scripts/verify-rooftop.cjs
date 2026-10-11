@@ -5,7 +5,7 @@ const ts = require('typescript');
 const app = path.resolve(__dirname, '..');
 const output = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'homage-rooftop-'));
 try {
-  for (const relative of ['features/mckinney/portals/rooftop.ts', 'features/mckinney/portals/mapAccess.ts', 'lib/geo.ts']) {
+  for (const relative of ['features/mckinney/portals/rooftop.ts', 'features/mckinney/portals/mapAccess.ts', 'lib/geo.ts', 'features/mckinney/audio/proximity.ts']) {
     const target = path.join(output, relative.replace(/\.ts$/, '.js'));
     fs.mkdirSync(path.dirname(target), { recursive: true });
     fs.writeFileSync(target, ts.transpileModule(fs.readFileSync(path.join(app, relative), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, esModuleInterop: true } }).outputText);
@@ -14,8 +14,20 @@ try {
   fs.copyFileSync(path.join(app, 'features/mckinney/portals/mapPortals.json'), path.join(output, 'features/mckinney/portals/mapPortals.json'));
   const { MAP_PORTALS, portalAccess, isPortalVisible } = require(path.join(output, 'features/mckinney/portals/mapAccess.js'));
   const { garage, insideGarage, canPlace, canRecordBaseline, relativeHeight, isPlacement, rooftopAccess } = require(path.join(output, 'features/mckinney/portals/rooftop.js'));
+  const { proximitySignal } = require(path.join(output, 'features/mckinney/audio/proximity.js'));
   const now = Date.now();
   const fix = { ...garage.location, altitude: 200, altitudeAccuracy: 8, accuracy: 5, timestamp: now };
+  const hidden = MAP_PORTALS.find(p => p.id === 'tupps-hidden');
+  const hiddenFix = { ...fix, latitude: hidden.latitude, longitude: hidden.longitude };
+  const approachFix = { ...hiddenFix, latitude: hidden.latitude + 0.00035 };
+  assert(!isPortalVisible(hidden, approachFix, now));
+  assert.equal(proximitySignal(approachFix, 'android', now).id, hidden.id);
+  assert(proximitySignal(approachFix, 'android', now).tuning < 1);
+  assert.equal(proximitySignal(hiddenFix, 'android', now).tuning, 1);
+  for (const invalid of [null, {...hiddenFix, accuracy:21}, {...hiddenFix, timestamp:now-31000}, {...hiddenFix, latitude:34}]) {
+    assert.equal(proximitySignal(invalid, 'android', now), null);
+  }
+  assert(proximitySignal({...fix, latitude:MAP_PORTALS[0].latitude, longitude:MAP_PORTALS[0].longitude}, 'android', now).tuning < 1);
   assert(insideGarage(fix));
   assert(canPlace(fix, now));
   assert(canRecordBaseline(fix, now));

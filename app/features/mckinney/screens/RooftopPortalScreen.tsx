@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AppState,
   Platform,
@@ -7,10 +7,10 @@ import {
   Text,
   View,
   StyleSheet,
-  Linking,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as Location from "expo-location";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import embeddedMap from "../map/embedded.json";
 import { WebView } from "react-native-webview";
 import { haversine } from "../../../lib/geo";
@@ -20,18 +20,55 @@ import {
   portalAccess,
   isPortalVisible,
 } from "../portals/mapAccess";
+import {
+  beginJourney,
+  chooseStop,
+  completeStop,
+  currentStop,
+  journeyFinished,
+  nextStops,
+  type Journey,
+} from "../journey/graph";
+import { PortalActivity } from "../activities/PortalActivity";
 import { portalHtml } from "./portalHtml";
+import { proximitySignal } from "../audio/proximity";
+import { usePortalAudio } from "../audio/usePortalAudio";
 
 const meters = (n: number | null) =>
   n === null || !Number.isFinite(n) ? "Unavailable" : n.toFixed(1) + " m";
 
 export default function RooftopPortalScreen() {
+  const { sharedDestination, sharedFocus } = useLocalSearchParams<{
+    sharedDestination?: string;
+    sharedFocus?: string;
+  }>();
   const mapRef = useRef<WebView>(null);
   const visibleIdsRef = useRef(new Set<string>());
   const frameRef = useRef<HTMLIFrameElement>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
+  const [showAnimation, setShowAnimation] = useState(false);
+  const [journey, setJourney] = useState<Journey | null>(null);
+  const [showHidden, setShowHidden] = useState(false);
+  const [focusRequest, setFocusRequest] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [mapError, setMapError] = useState(false);
+  useEffect(() => {
+    if (
+      typeof sharedDestination === "string" &&
+      MAP_PORTALS.some((portal) => portal.id === sharedDestination)
+    ) {
+      setSelectedId(sharedDestination);
+      setFocusRequest((value) => value + 1);
+      setMode("map");
+    }
+  }, [sharedDestination, sharedFocus]);
+  const [screenFocused, setScreenFocused] = useState(true);
+  useFocusEffect(
+    useCallback(() => {
+      setScreenFocused(true);
+      return () => setScreenFocused(false);
+    }, []),
+  );
   const [fix, setFix] = useState<Fix | null>(null);
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
@@ -96,8 +133,43 @@ export default function RooftopPortalScreen() {
       subscription?.remove();
     };
   }, [attempt, foreground]);
-  const visiblePortals = MAP_PORTALS.filter((p) =>
-    isPortalVisible(p, error ? null : fix, now),
+  const [muted, setMuted] = useState(false);
+  const [demoStarted, setDemoStarted] = useState<number | null>(null);
+  const [demoProgress, setDemoProgress] = useState(0);
+  const previousSignal = useRef<string | null>(null);
+  const signal = proximitySignal(
+    error ? null : fix,
+    Platform.OS,
+    now,
+    previousSignal.current,
+  );
+  useEffect(() => {
+    previousSignal.current = signal?.id ?? null;
+  }, [signal?.id]);
+  useEffect(() => {
+    if (!foreground || !screenFocused || mode !== "map" || muted)
+      setDemoStarted(null);
+  }, [foreground, screenFocused, mode, muted]);
+  useEffect(() => {
+    if (demoStarted === null) return;
+    setDemoProgress(0);
+    const timer = setInterval(() => {
+      const elapsed = Date.now() - demoStarted;
+      setDemoProgress(Math.min(1, elapsed / 6000));
+      if (elapsed >= 8000) setDemoStarted(null);
+    }, 100);
+    return () => clearInterval(timer);
+  }, [demoStarted]);
+  const audioError = usePortalAudio(
+    demoStarted !== null ? { tuning: demoProgress, volume: 0.3 } : signal,
+    foreground &&
+      screenFocused &&
+      mode === "map" &&
+      !muted &&
+      (demoStarted !== null || !error),
+  );
+  const visiblePortals = MAP_PORTALS.filter(
+    (p) => showHidden || isPortalVisible(p, error ? null : fix, now),
   );
   visibleIdsRef.current = new Set(visiblePortals.map((p) => p.id));
   const selected = visiblePortals.find((p) => p.id === selectedId);
@@ -133,6 +205,8 @@ export default function RooftopPortalScreen() {
   const mapFix = fix && !error && usableFix(fix, now) ? fix : null;
   const mapLocation = JSON.stringify({
     type: "homage-location",
+    focusRequest,
+    showHidden,
     latitude: mapFix?.latitude ?? null,
     longitude: mapFix?.longitude ?? null,
     fix: mapFix,
@@ -175,7 +249,23 @@ export default function RooftopPortalScreen() {
           "); true;",
       );
   }, [mapLocation, mapLoaded, mode]);
+  function previewStop(id: string) {
+    setShowHidden(true);
+    setSelectedId(id);
+    setShowAnimation(false);
+    setMode("preview");
+  }
+  function followConnection(id: string) {
+    if (!journey || !nextStops(journey).includes(id)) return;
+    setJourney(chooseStop(journey, id));
+    setShowHidden(true);
+    setSelectedId(id);
+    setShowAnimation(false);
+    setMapLoaded(false);
+    setMode("map");
+  }
   function backToMap() {
+    setShowAnimation(false);
     setMapLoaded(false);
     setMode("map");
   }
@@ -197,8 +287,50 @@ export default function RooftopPortalScreen() {
           >
             <Text style={s.buttonText}>Back to map</Text>
           </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            style={s.textButton}
+            onPress={() => setShowAnimation((value) => !value)}
+          >
+            <Text style={s.link}>
+              {showAnimation ? "Try the activity" : "View portal animation"}
+            </Text>
+          </Pressable>
         </View>
-        {Platform.OS === "web" ? (
+        {!showAnimation ? (
+          <PortalActivity
+            key={activePortal.id + mode}
+            portal={activePortal}
+            preview={mode === "preview"}
+            journey={
+              journey &&
+              mode === "preview" &&
+              currentStop(journey) === activePortal.id
+                ? {
+                    completed: journey.completed.includes(activePortal.id),
+                    finished: journeyFinished(journey),
+                    trail: journey.path
+                      .map(
+                        (id) =>
+                          MAP_PORTALS.find((p) => p.id === id)?.shortName ?? id,
+                      )
+                      .join(" → "),
+                    choices: nextStops(journey).map((id) => ({
+                      id,
+                      label:
+                        "Follow clue · " +
+                        (MAP_PORTALS.find((p) => p.id === id)?.shortName ?? id),
+                    })),
+                    onComplete: () =>
+                      setJourney((current) =>
+                        current ? completeStop(current, activePortal.id) : null,
+                      ),
+                    onChoose: followConnection,
+                  }
+                : undefined
+            }
+          />
+        ) : Platform.OS === "web" ? (
           <iframe
             title="Portal preview"
             srcDoc={html}
@@ -263,8 +395,138 @@ export default function RooftopPortalScreen() {
           </View>
         )}
       </View>
-      <View style={s.panel}>
+      <ScrollView style={s.panelScroll} contentContainerStyle={s.panel}>
         <Text style={s.eyebrow}>HOMAGE · 3D PORTALS</Text>
+        <Pressable
+          accessibilityRole="button"
+          style={s.button}
+          onPress={() => router.push("/shared-walk")}
+        >
+          <Text style={s.buttonText}>
+            A shared walk · two contributions, one finale
+          </Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          style={s.textButton}
+          onPress={() => router.push("/sky-test")}
+        >
+          <Text style={s.link}>Sky test · live sensors</Text>
+        </Pressable>
+        {journey && !journeyFinished(journey) && (
+          <View style={s.destination}>
+            <Text style={s.eyebrow}>YOUR NEXT PORTAL</Text>
+            <Text style={s.subtitle}>
+              {MAP_PORTALS.find((p) => p.id === currentStop(journey))?.place}
+            </Text>
+            <Text style={s.copy}>
+              {MAP_PORTALS.find((p) => p.id === currentStop(journey))?.address}
+            </Text>
+            <Text style={s.note}>
+              Highlighted on the map · distance is straight-line, not a walking
+              route.
+            </Text>
+            {mapFix && (
+              <Text style={s.copy}>
+                {meters(
+                  haversine(
+                    mapFix,
+                    MAP_PORTALS.find((p) => p.id === currentStop(journey))!,
+                  ),
+                )}{" "}
+                away
+              </Text>
+            )}
+            <Pressable
+              accessibilityRole="button"
+              style={s.button}
+              onPress={() => {
+                setSelectedId(currentStop(journey));
+                setShowHidden(true);
+                setFocusRequest((value) => value + 1);
+              }}
+            >
+              <Text style={s.buttonText}>Focus destination</Text>
+            </Pressable>
+          </View>
+        )}
+        <Pressable
+          accessibilityRole="button"
+          style={s.button}
+          onPress={() => {
+            const next = journey ?? beginJourney();
+            setJourney(next);
+            previewStop(currentStop(next));
+          }}
+        >
+          <Text style={s.buttonText}>
+            {journey ? "Continue preview journey" : "Try a portal journey"}
+          </Text>
+        </Pressable>
+        {journey && (
+          <Pressable
+            accessibilityRole="button"
+            style={s.textButton}
+            onPress={() => setJourney(null)}
+          >
+            <Text style={s.link}>End preview journey</Text>
+          </Pressable>
+        )}
+        <Text style={s.note}>
+          A branching story to try from anywhere. Preview progress lasts until
+          you reload; no real visits are recorded.
+        </Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ selected: showHidden }}
+          onPress={() => setShowHidden((value) => !value)}
+          style={s.button}
+        >
+          <Text style={s.buttonText}>
+            {showHidden ? "Hide hidden portals" : "Show hidden portals"}
+          </Text>
+        </Pressable>
+        {showHidden && (
+          <Text style={s.note}>
+            Preview mode · hidden portals are visible. Entry still requires
+            visiting their location.
+          </Text>
+        )}
+        <View style={s.actions}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => setMuted((value) => !value)}
+            style={s.textButton}
+          >
+            <Text style={s.link}>
+              {muted ? "Unmute portal sound" : "Mute portal sound"}
+            </Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            style={s.textButton}
+            onPress={() => {
+              setMuted(false);
+              setDemoStarted(demoStarted === null ? Date.now() : null);
+            }}
+          >
+            <Text style={s.link}>
+              {demoStarted === null ? "Try the sound" : "Stop sound demo"}
+            </Text>
+          </Pressable>
+        </View>
+        <Text style={s.note}>
+          {audioError ||
+            (demoStarted !== null
+              ? "Sound demo · dissonance resolving into harmony"
+              : muted
+                ? "Portal sound muted."
+                : signal
+                  ? signal.ready
+                    ? "Signal in tune · a portal is within reach."
+                    : "A signal is nearby. Follow the sound as it settles."
+                  : "Listen for a chord within 60 m of a portal. It resolves as you approach.")}
+        </Text>
         {!selected && error !== "" && (
           <>
             <Text style={s.status}>{error}</Text>
@@ -292,54 +554,35 @@ export default function RooftopPortalScreen() {
           {selected
             ? selected.place +
               (fix ? " · " + meters(haversine(fix, selected)) + " away" : "")
-            : "Explore the square. Hidden signals appear only while you’re nearby."}
+            : "Tap a portal on the map or a name below to see its location and animated preview from anywhere. Hidden portals still appear only nearby."}
         </Text>
         {selected && <Text style={s.note}>{selected.address}</Text>}
         {selected ? (
           <>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={"Preview " + selected.place + " portal"}
+              onPress={() => setMode("preview")}
+              style={s.button}
+            >
+              <Text style={s.buttonText}>Preview this portal</Text>
+            </Pressable>
+            <Text style={s.note}>
+              Preview from anywhere · no GPS or visit required.
+            </Text>
             <Text style={s.status} accessibilityLiveRegion="polite">
               {error || access.message}
             </Text>
-            <View style={s.actions}>
+            {ready && (
               <Pressable
                 accessibilityRole="button"
-                accessibilityState={{ disabled: !ready }}
-                disabled={!ready}
                 onPress={() => setMode("field")}
-                style={[s.button, s.grow, !ready && { opacity: 0.45 }]}
+                style={s.button}
               >
-                <Text style={s.buttonText}>
-                  {ready
-                    ? "Enter portal"
-                    : selected.kind === "rooftop"
-                      ? "Reach the rooftop"
-                      : "Approach storefront"}
-                </Text>
+                <Text style={s.buttonText}>Enter portal</Text>
               </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() =>
-                  void Linking.openURL(
-                    "https://maps.apple.com/?daddr=" +
-                      selected.latitude +
-                      "," +
-                      selected.longitude +
-                      "&dirflg=w",
-                  )
-                }
-                style={[s.button, s.grow]}
-              >
-                <Text style={s.buttonText}>Directions</Text>
-              </Pressable>
-            </View>
+            )}
             <View style={s.actions}>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => setMode("preview")}
-                style={s.textButton}
-              >
-                <Text style={s.link}>Preview portal</Text>
-              </Pressable>
               <Pressable
                 accessibilityRole="button"
                 onPress={() => setSelectedId(null)}
@@ -379,19 +622,29 @@ export default function RooftopPortalScreen() {
                 style={[s.portalChip, { borderColor: p.color }]}
               >
                 <Text style={[s.link, { color: p.color }]}>
-                  {"◎ " + p.shortName}
+                  {"◎ " +
+                    p.shortName +
+                    (p.hiddenUntilNearby ? " · Hidden" : "")}
                 </Text>
               </Pressable>
             ))}
           </ScrollView>
         )}
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: "#101e24" },
   map: { flex: 1, backgroundColor: "#101e24" },
+  destination: {
+    padding: 12,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: "#80edbc",
+    borderRadius: 12,
+  },
+  panelScroll: { maxHeight: "55%", flexGrow: 0 },
   panel: {
     backgroundColor: "#101c22",
     borderTopWidth: 1,

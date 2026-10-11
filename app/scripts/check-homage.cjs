@@ -55,6 +55,8 @@ async function request(url, options = {}) {
   const checks = [
     ["TypeScript", ["node_modules/typescript/bin/tsc", "--noEmit"]],
     ["Expo lint", ["node_modules/expo/bin/cli", "lint"]],
+    ["Portal activities", ["scripts/verify-activities.cjs"]],
+    ["Shared walk", ["scripts/verify-shared-walk.cjs"]],
     ["Location and hidden portals", ["scripts/verify-rooftop.cjs"]],
     ["Map data and bundled assets", ["scripts/verify-portal-map.cjs"]],
   ];

@@ -1,0 +1,34 @@
+{
+  "name": "@mckinney/star-engine",
+  "version": "0.2.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "react-native": "./src/index.ts",
+      "default": "./dist/index.js"
+    },
+    "./catalog": {
+      "types": "./dist/starCatalog.d.ts",
+      "react-native": "./src/starCatalog.ts",
+      "default": "./dist/starCatalog.js"
+    },
+    "./model": {
+      "types": "./dist/skyModel.d.ts",
+      "react-native": "./src/skyModel.ts",
+      "default": "./dist/skyModel.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "NOTICE.md",
+    "ASTRONOMY-ENGINE-LICENSE.txt"
+  ],
+  "dependencies": {
+    "astronomy-engine": "2.1.19"
+  }
+}

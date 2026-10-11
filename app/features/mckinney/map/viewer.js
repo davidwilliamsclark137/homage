@@ -87,7 +87,8 @@ try {
     named.add(road.name);label(road.name,...[p[0],ground(...p)+3,p[1]],'street');
   }
   label('DOWNTOWN SQUARE',0,ground(0,0)+22,0);
-  let selectedId=null, currentFix=null;
+  let selectedId=null, currentFix=null, showHidden=false, lastFocusRequest=0;
+  const portalVisible = p => showHidden || isPortalVisible(p,currentFix);
   const markers=portals.map(p=>{
     const [x,z]=local(p.longitude,p.latitude), y=ground(x,z)+p.heightMeters;
     const group=new THREE.Group();group.position.set(x,y+(p.kind==='rooftop'?7:3),z);
@@ -97,17 +98,17 @@ try {
     group.add(ring,aura);scene.add(group);
     const beam=new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(x,y,z),new THREE.Vector3(x,y+14,z)]),new THREE.LineBasicMaterial({color:p.color}));scene.add(beam);
     const el=document.createElement('button');
-    el.className='portal-marker';el.hidden=p.hiddenUntilNearby;group.visible=beam.visible=!p.hiddenUntilNearby;el.textContent='◎ '+p.shortName;
+    el.className='portal-marker';el.hidden=p.hiddenUntilNearby;group.visible=beam.visible=!p.hiddenUntilNearby;el.textContent='';
     el.setAttribute('aria-label','Select portal at '+p.place);el.style.borderColor=p.color;el.style.color=p.color;
     document.getElementById('markers').appendChild(el);
-    el.onclick=()=>{if(!isPortalVisible(p,currentFix))return;selectedId=p.id;send('portal-selected',p.id);focusPortal();};
+    el.onclick=()=>{if(!portalVisible(p))return;selectedId=p.id;send('portal-selected',p.id);focusPortal();};
     return {p,x,z,y,group,ring,aura,beam,el,point:new THREE.Vector3(x,y+(p.kind==='rooftop'?23:10),z)};
   });
   const player=new THREE.Mesh(new THREE.SphereGeometry(3,12,8),new THREE.MeshBasicMaterial({color:'#8ecaff',depthTest:false}));
   player.renderOrder=10;player.visible=false;scene.add(player);
   let playerPosition=null;
   function focus(x,z,distance=240){const y=ground(x,z);controls.target.set(x,y+9,z);camera.position.set(x+distance*.65,y+distance*.85,z+distance*.95);controls.update();}
-  function focusPortal(){const m=markers.find(m=>m.p.id===selectedId&&isPortalVisible(m.p,currentFix))||markers[1];focus(m.x,m.z,190);}
+  function focusPortal(){const m=markers.find(m=>m.p.id===selectedId&&portalVisible(m.p))||markers[1];focus(m.x,m.z,190);}
   function overview(){focus(40,-5,360);}
   document.getElementById('focus').onclick=focusPortal;
   document.getElementById('overview').onclick=overview;
@@ -115,12 +116,11 @@ try {
     if(playerPosition){focus(...playerPosition,220);document.getElementById('hint').textContent='Your location · blue dot';}
     else document.getElementById('hint').textContent='Waiting for your phone’s location';
   };
-  document.getElementById('plus').onclick=()=>{camera.position.sub(controls.target).multiplyScalar(.75).add(controls.target);controls.update();};
-  document.getElementById('minus').onclick=()=>{camera.position.sub(controls.target).multiplyScalar(1.3).add(controls.target);controls.update();};
   window.homageMap={update(value){
     currentFix=value.fix??null;
+    showHidden=value.showHidden === true;
     for(const m of markers){m.el.classList.toggle('ready',Array.isArray(value.readyIds)&&value.readyIds.includes(m.p.id));m.el.classList.toggle('selected',m.p.id===value.selectedId);}
-    if(value.selectedId&&value.selectedId!==selectedId&&markers.some(m=>m.p.id===value.selectedId&&isPortalVisible(m.p,currentFix))){selectedId=value.selectedId;focusPortal();}
+    if(value.selectedId&&(value.selectedId!==selectedId||value.focusRequest!==lastFocusRequest)&&markers.some(m=>m.p.id===value.selectedId&&portalVisible(m.p))){selectedId=value.selectedId;lastFocusRequest=value.focusRequest;focusPortal();}
     if(value.latitude!==null&&Number.isFinite(value.latitude)&&Number.isFinite(value.longitude)){
       playerPosition=local(value.longitude,value.latitude);
       const [x,z]=playerPosition;
@@ -144,7 +144,7 @@ try {
     controls.target.x=THREE.MathUtils.clamp(controls.target.x,-780,780);controls.target.z=THREE.MathUtils.clamp(controls.target.z,-780,780);
     for(const m of markers){m.ring.rotation.z=t*.0002;m.aura.scale.setScalar(1+Math.sin(t*.002)*.08);m.group.quaternion.copy(camera.quaternion);}
     renderer.render(scene,camera);
-    for(const m of markers){const visible=isPortalVisible(m.p,currentFix);m.group.visible=m.beam.visible=visible;m.el.hidden=!visible;if(visible)position(m.el,m.point);else {m.el.style.display='none';if(selectedId===m.p.id)selectedId=null;}}
+    for(const m of markers){const visible=portalVisible(m.p);m.group.visible=m.beam.visible=visible;m.el.hidden=!visible;if(visible)position(m.el,m.point);else {m.el.style.display='none';if(selectedId===m.p.id)selectedId=null;}}
     for(const item of labels)position(item.el,item.point);
   }
   addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
