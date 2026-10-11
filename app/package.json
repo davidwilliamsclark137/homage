@@ -9,7 +9,12 @@
     "web": "expo start --web --port 8084",
     "lint": "expo lint",
     "check": "node scripts/check-homage.cjs",
-    "check:live": "node scripts/check-homage.cjs --live"
+    "check:live": "node scripts/check-homage.cjs --live",
+    "build:engine": "tsc -p vendor/engine/tsconfig.json",
+    "build:map": "node scripts/build-portal-map.cjs",
+    "build:assets": "npm run build:engine && npm run build:map",
+    "bundle:phones": "expo export --platform ios --platform android --output-dir dist/phones",
+    "ci": "npm run build:assets && npm run check && npm run bundle:phones"
   },
   "dependencies": {
     "@mckinney/star-engine": "file:vendor/engine",
@@ -42,8 +47,10 @@
     "@types/react": "~19.1.0",
     "babel-preset-expo": "~54.0.10",
     "eas-cli": "^16.26.0",
+    "esbuild": "0.28.2",
     "eslint": "^9.25.0",
     "eslint-config-expo": "~10.0.0",
+    "three": "0.180.0",
     "typescript": "~5.9.2"
   }
 }
